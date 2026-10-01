@@ -1,5 +1,5 @@
 // Service worker: permite usar o app offline depois do primeiro acesso.
-const CACHE = 'financas-v1';
+const CACHE = 'fingui-v2';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/icon.svg'];
 
 self.addEventListener('install', (e) => {

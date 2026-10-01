@@ -1,12 +1,12 @@
 {
-  "name": "Minhas Finanças",
-  "short_name": "Finanças",
+  "name": "FinGui",
+  "short_name": "FinGui",
   "description": "Controle de entradas, despesas fixas e variáveis por categoria.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f6f8",
-  "theme_color": "#0f766e",
+  "background_color": "#f6f7f9",
+  "theme_color": "#ffffff",
   "lang": "pt-BR",
   "icons": [
     { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }

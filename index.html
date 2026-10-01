@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f766e">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Minhas Finanças</title>
+  <meta name="apple-mobile-web-app-title" content="FinGui">
+  <title>FinGui</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
@@ -13,7 +15,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Minhas Finanças</h1>
+    <h1><img src="icons/icon.svg" alt="" width="28" height="28">FinGui</h1>
     <div class="month-nav">
       <button id="prevMonth" aria-label="Mês anterior">‹</button>
       <span id="monthLabel"></span>
@@ -49,10 +51,57 @@
         <h2>Entradas por origem</h2>
         <ul id="incomeBreakdown" class="breakdown"></ul>
       </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section id="view-insights" class="view">
+      <div class="kpis" id="kpis"></div>
 
       <div class="panel">
-        <h2>Últimos 6 meses</h2>
-        <div id="history" class="history"></div>
+        <h2>Gastos por categoria</h2>
+        <div class="donut-wrap">
+          <div id="donut" class="donut"></div>
+          <ul id="donutLegend" class="legend"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Ritmo de gastos</h2>
+        <p class="muted small">Gasto acumulado ao longo do mês, comparado com o mês anterior.</p>
+        <div id="paceChart" class="chart"></div>
+        <ul class="legend inline" id="paceLegend"></ul>
+      </div>
+
+      <div class="panel" id="deliveryPanel">
+        <h2>🛵 Delivery</h2>
+        <div class="kpis small" id="deliveryKpis"></div>
+        <p id="deliveryInsight" class="insight"></p>
+        <h3>Últimos 6 meses</h3>
+        <div id="deliveryChart" class="chart"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Comparado ao mês anterior</h2>
+        <ul id="compareList" class="compare"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Entradas x Saídas (6 meses)</h2>
+        <div id="historyChart" class="chart"></div>
+        <ul class="legend inline">
+          <li><i class="dot" style="background:var(--income)"></i>Entradas</li>
+          <li><i class="dot" style="background:var(--expense)"></i>Saídas</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Gastos por dia da semana</h2>
+        <div id="weekdayChart" class="chart"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Maiores gastos do mês</h2>
+        <ol id="topExpenses" class="top-list"></ol>
       </div>
     </section>
 
@@ -108,6 +157,7 @@
 
   <nav class="tabbar">
     <button data-view="resumo" class="active">📊<span>Resumo</span></button>
+    <button data-view="insights">💡<span>Insights</span></button>
     <button data-view="lancamentos">📋<span>Lançamentos</span></button>
     <button data-view="config">⚙️<span>Ajustes</span></button>
   </nav>
@@ -120,14 +170,17 @@
         <input type="radio" name="type" id="tExpense" value="expense" checked><label for="tExpense">Saída</label>
         <input type="radio" name="type" id="tIncome" value="income"><label for="tIncome">Entrada</label>
       </div>
-      <label>Valor (R$)
+      <label>Valor total (R$)
         <input name="amount" id="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off">
       </label>
       <label>Descrição
-        <input name="description" placeholder="Ex.: Mercado, Uber, Salário" autocomplete="off">
+        <input name="description" placeholder="Ex.: Mercado, Uber, iFood" autocomplete="off">
       </label>
       <label>Categoria
         <select name="category" id="category" required></select>
+      </label>
+      <label id="feeRow" hidden>Taxa de entrega (R$) — já incluída no valor total
+        <input name="fee" id="fee" inputmode="decimal" placeholder="0,00 (opcional)" autocomplete="off">
       </label>
       <div id="natureRow" class="toggle">
         <input type="radio" name="nature" id="nVariable" value="variable" checked><label for="nVariable">Variável</label>
@@ -143,6 +196,7 @@
     </form>
   </dialog>
 
+  <div id="tooltip" class="tooltip" role="status"></div>
   <div id="toast" class="toast"></div>
 
   <script src="app.js"></script>

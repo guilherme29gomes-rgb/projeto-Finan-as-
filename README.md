@@ -1,4 +1,4 @@
-# Minhas Finanças
+# FinGui
 
 App simples de controle financeiro pessoal (PWA). Funciona no navegador do celular ou do computador e pode ser instalado na tela inicial.
 
@@ -8,7 +8,8 @@ App simples de controle financeiro pessoal (PWA). Funciona no navegador do celul
 - **Entradas e saídas**: salário, freelance etc. de um lado, gastos do outro. Mostra o saldo do mês.
 - **Despesas fixas x variáveis**: cada gasto é marcado como fixo (aluguel, internet...) ou variável (mercado, Uber...), com uma barra mostrando a proporção.
 - **Gastos por categoria**: ranking com valor e % de cada categoria, além de uma frase dizendo onde o gasto está mais concentrado.
-- **Histórico de 6 meses**: gráfico com as entradas e saídas de cada mês.
+- **Delivery**: categoria própria, com campo opcional de taxa de entrega. Mostra total gasto, nº de pedidos, ticket médio e quanto foi só de taxa.
+- **Insights (gráficos)**: gasto médio por dia e projeção do mês, rosca de gastos por categoria, ritmo de gastos comparado ao mês anterior, variação por categoria, entradas x saídas em 6 meses, gastos por dia da semana e os 5 maiores gastos. Toque nos gráficos para ver os valores.
 - **Copiar fixas**: um botão repete as despesas fixas do mês anterior no mês atual.
 - **Lançamentos**: lista por dia, com filtros (tipo, fixa/variável, categoria) e busca. Toque num item para editar e na 🗑 para excluir.
 - **Ajustes**: crie ou remova categorias, faça backup (JSON) e exporte para planilha (CSV, abre no Excel/Google Sheets).
