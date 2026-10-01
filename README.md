@@ -10,6 +10,7 @@ App simples de controle financeiro pessoal (PWA). Funciona no navegador do celul
 - **Gastos por categoria**: ranking com valor e % de cada categoria, além de uma frase dizendo onde o gasto está mais concentrado.
 - **Delivery**: categoria própria, com campo opcional de taxa de entrega. Mostra total gasto, nº de pedidos, ticket médio e quanto foi só de taxa.
 - **Insights (gráficos)**: gasto médio por dia e projeção do mês, rosca de gastos por categoria, ritmo de gastos comparado ao mês anterior, variação por categoria, entradas x saídas em 6 meses, gastos por dia da semana e os 5 maiores gastos. Toque nos gráficos para ver os valores.
+- **Fatura do cartão**: lance o valor total da fatura e depois detalhe o que tem dentro. Dá para importar o arquivo do banco (**CSV** ou **OFX**: Nubank, Inter, Itaú, C6, Santander…), colar as linhas do PDF ou adicionar item a item. O app classifica sozinho as compras conhecidas (iFood → Delivery, Uber → Transporte, Netflix → Assinaturas fixa, farmácias → Saúde…) e **aprende** com as suas correções: ao classificar "Loja do Zé" como Compras, as próximas compras dela já entram assim. A tela "Racional da fatura" mostra para onde foi o dinheiro, quanto está parcelado, as assinaturas e o que falta classificar. Nos resumos e gráficos, cada item conta na sua categoria real.
 - **Copiar fixas**: um botão repete as despesas fixas do mês anterior no mês atual.
 - **Lançamentos**: lista por dia, com filtros (tipo, fixa/variável, categoria) e busca. Toque num item para editar e na 🗑 para excluir.
 - **Ajustes**: crie ou remova categorias, faça backup (JSON) e exporte para planilha (CSV, abre no Excel/Google Sheets).
@@ -20,6 +21,15 @@ Não precisa instalar nada: são só arquivos estáticos (`index.html`, `styles.
 
 - **No computador**: rode um servidor local na pasta (`python3 -m http.server`) e abra `http://localhost:8000`. Também dá para abrir o `index.html` direto, mas aí não funciona offline nem instala.
 - **No celular**: publique a pasta (por exemplo no **GitHub Pages**: Settings → Pages → escolha a branch). Depois abra o link no celular e use "Adicionar à tela inicial". Ele passa a abrir como um app e funciona offline.
+
+## Atualizações não apagam os dados
+
+Os lançamentos ficam salvos no aparelho com a mesma chave desde a primeira versão; publicar uma versão nova do app **não apaga nada**. Além disso:
+- antes de converter dados de uma versão antiga, o app guarda uma cópia do formato anterior;
+- todo dia ele guarda uma **cópia automática** (Ajustes → Restaurar cópia automática);
+- se os dados não puderem ser lidos, o conteúdo original é preservado à parte, nunca sobrescrito;
+- com o app aberto em duas abas, uma não apaga o que a outra salvou;
+- o app pede ao navegador armazenamento protegido e lembra você de salvar um backup a cada 7 dias.
 
 ## Onde ficam os dados
 

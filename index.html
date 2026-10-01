@@ -28,6 +28,10 @@
   <main>
     <!-- RESUMO -->
     <section id="view-resumo" class="view active">
+      <div id="backupBanner" class="banner" hidden>
+        <span>💾 Faz <b id="backupDays"></b> que você não salva um backup dos seus dados.</span>
+        <button id="bannerBackup">Salvar backup</button>
+      </div>
       <div class="cards">
         <div class="card income"><span>Entradas</span><strong id="totIncome">R$ 0,00</strong></div>
         <div class="card expense"><span>Saídas</span><strong id="totExpense">R$ 0,00</strong></div>
@@ -46,6 +50,7 @@
       <div class="panel">
         <h2>Onde seu dinheiro está indo</h2>
         <p id="topInsight" class="insight"></p>
+        <p id="cardPending" class="pending" hidden></p>
         <ul id="categoryBreakdown" class="breakdown"></ul>
       </div>
 
@@ -120,7 +125,10 @@
         <select id="filterCategory"><option value="">Todas as categorias</option></select>
       </div>
       <input id="search" type="search" placeholder="Buscar descrição...">
-      <button id="copyFixed" class="secondary full">Copiar despesas fixas do mês anterior</button>
+      <div class="btn-row list-actions">
+        <button id="newCard" class="secondary">💳 Lançar fatura do cartão</button>
+        <button id="copyFixed" class="secondary">↻ Copiar fixas do mês anterior</button>
+      </div>
       <ul id="txList" class="tx-list"></ul>
     </section>
 
@@ -144,12 +152,15 @@
       </div>
       <div class="panel">
         <h2>Backup dos dados</h2>
-        <p class="muted">Os dados ficam salvos neste aparelho. Faça backup de vez em quando.</p>
+        <p class="muted">Os dados ficam salvos neste aparelho e <b>não são apagados quando o app é atualizado</b>.
+          Eles só se perdem se você limpar os dados do navegador ou trocar de aparelho — por isso, guarde um backup.</p>
+        <p id="storageStatus" class="muted small-note"></p>
         <div class="btn-row">
           <button id="exportJson" class="secondary">Exportar backup</button>
           <label class="secondary btn-like">Importar backup<input id="importJson" type="file" accept="application/json" hidden></label>
           <button id="exportCsv" class="secondary">Exportar planilha (CSV)</button>
         </div>
+        <button id="restoreSnapshot" class="link-btn">Restaurar cópia automática do aparelho</button>
       </div>
     </section>
   </main>
@@ -181,6 +192,7 @@
       <label>Categoria
         <select name="category" id="category" required></select>
       </label>
+      <p id="cardHint" class="hint" hidden>💳 Informe o <b>valor total da fatura</b>. Depois de salvar você detalha os itens (importando o arquivo do banco ou colando o texto) e o app classifica cada gasto.</p>
       <label id="feeRow" hidden>Taxa de entrega (R$) — já incluída no valor total
         <input name="fee" id="fee" inputmode="decimal" placeholder="0,00 (opcional)" autocomplete="off">
       </label>
@@ -194,6 +206,78 @@
       <div class="btn-row">
         <button type="button" id="cancelTx" class="secondary">Cancelar</button>
         <button type="submit" id="saveTx">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- FATURA DO CARTÃO -->
+  <dialog id="cardDialog" class="sheet">
+    <div class="sheet-head">
+      <button id="closeCard" class="icon-btn" aria-label="Voltar">‹</button>
+      <div class="sheet-title"><h2 id="cardTitle">Fatura do cartão</h2><small id="cardSub"></small></div>
+      <button id="editCard" class="secondary small-btn">Editar</button>
+    </div>
+    <div class="sheet-body">
+      <div class="panel">
+        <div class="card-head">
+          <div><span class="muted">Total da fatura</span><strong id="cardTotal"></strong></div>
+          <div class="right"><span class="muted">Detalhado</span><strong id="cardDone"></strong></div>
+        </div>
+        <div class="progress"><div id="cardProgress"></div></div>
+        <p id="cardStatus" class="small-note"></p>
+        <button id="useSum" class="link-btn" hidden></button>
+      </div>
+
+      <div class="btn-row import-row">
+        <label class="btn-like primary-like">📄 Importar arquivo<input type="file" id="cardFile" accept=".csv,.ofx,.txt,text/csv,text/plain" hidden></label>
+        <button id="pasteBtn" class="secondary">📋 Colar texto</button>
+        <button id="addItemBtn" class="secondary">+ Item</button>
+      </div>
+      <p class="muted small-note">Baixe a fatura no app do banco em <b>CSV</b> ou <b>OFX</b> (Nubank, Inter, Itaú, C6, Santander…) ou copie as linhas do PDF e cole aqui.</p>
+
+      <div class="panel">
+        <h2>Racional da fatura</h2>
+        <p id="cardInsight" class="insight"></p>
+        <ul id="cardBreakdown" class="breakdown"></ul>
+        <div id="cardFacts" class="facts"></div>
+      </div>
+
+      <div class="panel">
+        <div class="items-head">
+          <h2>Itens <small id="itemCount" class="muted"></small></h2>
+          <select id="itemFilter">
+            <option value="">Todos</option>
+            <option value="todo">A classificar</option>
+          </select>
+        </div>
+        <ul id="cardItems" class="items"></ul>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="pasteDialog">
+    <form id="pasteForm" method="dialog">
+      <h2>Colar itens da fatura</h2>
+      <p class="muted small-note">Cole as linhas copiadas do PDF, do site do banco ou de uma planilha. Cada linha deve ter data, descrição e valor, por exemplo:<br>
+        <code>12/09 IFOOD *RESTAURANTE 54,90</code></p>
+      <textarea id="pasteText" rows="9" placeholder="12/09  UBER *TRIP        23,45&#10;13/09  NETFLIX.COM         55,90&#10;15/09  MAGALU 02/10        120,00"></textarea>
+      <div class="btn-row">
+        <button type="button" id="cancelPaste" class="secondary">Cancelar</button>
+        <button type="submit">Processar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="itemDialog">
+    <form id="itemForm" method="dialog">
+      <h2>Item da fatura</h2>
+      <label>Valor (R$)<input name="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label>
+      <label>Descrição<input name="description" placeholder="Ex.: Netflix, Uber, Loja X" autocomplete="off"></label>
+      <label>Categoria<select name="category" id="itemCategory"></select></label>
+      <label>Data da compra<input type="date" name="date"></label>
+      <div class="btn-row">
+        <button type="button" id="cancelItem" class="secondary">Cancelar</button>
+        <button type="submit">Adicionar</button>
       </div>
     </form>
   </dialog>
