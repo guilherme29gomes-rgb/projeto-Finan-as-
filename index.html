@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Minhas Finanças</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Minhas Finanças</h1>
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Mês anterior">‹</button>
+      <span id="monthLabel"></span>
+      <button id="nextMonth" aria-label="Próximo mês">›</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- RESUMO -->
+    <section id="view-resumo" class="view active">
+      <div class="cards">
+        <div class="card income"><span>Entradas</span><strong id="totIncome">R$ 0,00</strong></div>
+        <div class="card expense"><span>Saídas</span><strong id="totExpense">R$ 0,00</strong></div>
+        <div class="card balance"><span>Saldo</span><strong id="totBalance">R$ 0,00</strong></div>
+      </div>
+
+      <div class="panel">
+        <h2>Fixas x Variáveis</h2>
+        <div class="split-bar"><div id="fixedBar" class="fixed"></div><div id="varBar" class="variable"></div></div>
+        <div class="split-legend">
+          <span><i class="dot fixed"></i>Fixas <b id="totFixed">R$ 0,00</b></span>
+          <span><i class="dot variable"></i>Variáveis <b id="totVariable">R$ 0,00</b></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Onde seu dinheiro está indo</h2>
+        <p id="topInsight" class="insight"></p>
+        <ul id="categoryBreakdown" class="breakdown"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Entradas por origem</h2>
+        <ul id="incomeBreakdown" class="breakdown"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Últimos 6 meses</h2>
+        <div id="history" class="history"></div>
+      </div>
+    </section>
+
+    <!-- LANÇAMENTOS -->
+    <section id="view-lancamentos" class="view">
+      <div class="filters">
+        <select id="filterType">
+          <option value="">Todos</option>
+          <option value="income">Entradas</option>
+          <option value="expense">Saídas</option>
+          <option value="fixed">Só despesas fixas</option>
+          <option value="variable">Só despesas variáveis</option>
+        </select>
+        <select id="filterCategory"><option value="">Todas as categorias</option></select>
+      </div>
+      <input id="search" type="search" placeholder="Buscar descrição...">
+      <button id="copyFixed" class="secondary full">Copiar despesas fixas do mês anterior</button>
+      <ul id="txList" class="tx-list"></ul>
+    </section>
+
+    <!-- CONFIG -->
+    <section id="view-config" class="view">
+      <div class="panel">
+        <h2>Categorias de gasto</h2>
+        <ul id="expenseCats" class="cat-list"></ul>
+        <form class="inline-form" data-kind="expense">
+          <input name="catName" placeholder="Nova categoria" required>
+          <button>Adicionar</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Categorias de entrada</h2>
+        <ul id="incomeCats" class="cat-list"></ul>
+        <form class="inline-form" data-kind="income">
+          <input name="catName" placeholder="Nova origem" required>
+          <button>Adicionar</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Backup dos dados</h2>
+        <p class="muted">Os dados ficam salvos neste aparelho. Faça backup de vez em quando.</p>
+        <div class="btn-row">
+          <button id="exportJson" class="secondary">Exportar backup</button>
+          <label class="secondary btn-like">Importar backup<input id="importJson" type="file" accept="application/json" hidden></label>
+          <button id="exportCsv" class="secondary">Exportar planilha (CSV)</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- BOTÃO RÁPIDO -->
+  <button id="fab" class="fab" aria-label="Registrar lançamento">+</button>
+
+  <nav class="tabbar">
+    <button data-view="resumo" class="active">📊<span>Resumo</span></button>
+    <button data-view="lancamentos">📋<span>Lançamentos</span></button>
+    <button data-view="config">⚙️<span>Ajustes</span></button>
+  </nav>
+
+  <!-- FORMULÁRIO DE LANÇAMENTO -->
+  <dialog id="txDialog">
+    <form id="txForm" method="dialog">
+      <h2 id="txTitle">Novo lançamento</h2>
+      <div class="toggle">
+        <input type="radio" name="type" id="tExpense" value="expense" checked><label for="tExpense">Saída</label>
+        <input type="radio" name="type" id="tIncome" value="income"><label for="tIncome">Entrada</label>
+      </div>
+      <label>Valor (R$)
+        <input name="amount" id="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off">
+      </label>
+      <label>Descrição
+        <input name="description" placeholder="Ex.: Mercado, Uber, Salário" autocomplete="off">
+      </label>
+      <label>Categoria
+        <select name="category" id="category" required></select>
+      </label>
+      <div id="natureRow" class="toggle">
+        <input type="radio" name="nature" id="nVariable" value="variable" checked><label for="nVariable">Variável</label>
+        <input type="radio" name="nature" id="nFixed" value="fixed"><label for="nFixed">Fixa</label>
+      </div>
+      <label>Data
+        <input type="date" name="date" required>
+      </label>
+      <div class="btn-row">
+        <button type="button" id="cancelTx" class="secondary">Cancelar</button>
+        <button type="submit" id="saveTx">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
