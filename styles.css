@@ -1,14 +1,18 @@
+/* "light dark" no html impede que o navegador do celular force o modo escuro;
+   o body fixa o tema claro para todo o conteúdo. */
+html { color-scheme: light dark; background: #f3f4f6; }
+body { color-scheme: light; min-height: 100vh; }
+
 :root {
-  color-scheme: light;
-  --bg: #f6f7f9;
+  --bg: #f3f4f6;
   --surface: #ffffff;
   --text: #0b0b0b;
   --text-2: #52514e;
   --muted: #8a8984;
   --border: #e7e6e2;
   --grid: #efeeeb;
-  --primary: #2a78d6;
-  --primary-soft: #e8f1fc;
+  --primary: #1f2328;
+  --primary-soft: #eceef1;
   --income: #1baf7a;
   --income-text: #0f7a54;
   --expense: #e34948;
@@ -196,7 +200,7 @@ button.full { width: 100%; margin-bottom: 10px; }
 .fab {
   position: fixed; right: 20px; bottom: 88px; z-index: 6;
   width: 60px; height: 60px; border-radius: 50%; font-size: 2rem; line-height: 1; padding: 0;
-  box-shadow: 0 8px 20px rgba(42, 120, 214, .35);
+  box-shadow: 0 8px 20px rgba(17, 19, 22, .28);
 }
 
 .tabbar {
