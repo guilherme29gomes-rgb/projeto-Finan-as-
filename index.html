@@ -192,7 +192,7 @@
       <label>Categoria
         <select name="category" id="category" required></select>
       </label>
-      <p id="cardHint" class="hint" hidden>💳 Informe o <b>valor total da fatura</b>. Depois de salvar você detalha os itens (importando o arquivo do banco ou colando o texto) e o app classifica cada gasto.</p>
+      <p id="cardHint" class="hint" hidden>💳 Informe o <b>valor total da fatura</b>. Depois de salvar, é só ir adicionando cada gasto da fatura com a categoria dele.</p>
       <label id="feeRow" hidden>Taxa de entrega (R$) — já incluída no valor total
         <input name="fee" id="fee" inputmode="decimal" placeholder="0,00 (opcional)" autocomplete="off">
       </label>
@@ -221,19 +221,19 @@
       <div class="panel">
         <div class="card-head">
           <div><span class="muted">Total da fatura</span><strong id="cardTotal"></strong></div>
-          <div class="right"><span class="muted">Detalhado</span><strong id="cardDone"></strong></div>
+          <div class="right"><span class="muted">Já lançado</span><strong id="cardDone"></strong></div>
         </div>
         <div class="progress"><div id="cardProgress"></div></div>
-        <p id="cardStatus" class="small-note"></p>
+        <p id="cardStatus" class="card-status"></p>
         <button id="useSum" class="link-btn" hidden></button>
       </div>
 
-      <div class="btn-row import-row">
-        <label class="btn-like primary-like">📄 Importar arquivo<input type="file" id="cardFile" accept=".csv,.ofx,.txt,text/csv,text/plain" hidden></label>
-        <button id="pasteBtn" class="secondary">📋 Colar texto</button>
-        <button id="addItemBtn" class="secondary">+ Item</button>
+      <button id="addItemBtn" class="add-item-btn">+ Adicionar gasto da fatura</button>
+
+      <div class="panel">
+        <h2>Gastos lançados <small id="itemCount" class="muted"></small></h2>
+        <ul id="cardItems" class="items"></ul>
       </div>
-      <p class="muted small-note">Baixe a fatura no app do banco em <b>CSV</b> ou <b>OFX</b> (Nubank, Inter, Itaú, C6, Santander…) ou copie as linhas do PDF e cole aqui.</p>
 
       <div class="panel">
         <h2>Racional da fatura</h2>
@@ -241,42 +241,23 @@
         <ul id="cardBreakdown" class="breakdown"></ul>
         <div id="cardFacts" class="facts"></div>
       </div>
-
-      <div class="panel">
-        <div class="items-head">
-          <h2>Itens <small id="itemCount" class="muted"></small></h2>
-          <select id="itemFilter">
-            <option value="">Todos</option>
-            <option value="todo">A classificar</option>
-          </select>
-        </div>
-        <ul id="cardItems" class="items"></ul>
-      </div>
     </div>
-  </dialog>
-
-  <dialog id="pasteDialog">
-    <form id="pasteForm" method="dialog">
-      <h2>Colar itens da fatura</h2>
-      <p class="muted small-note">Cole as linhas copiadas do PDF, do site do banco ou de uma planilha. Cada linha deve ter data, descrição e valor, por exemplo:<br>
-        <code>12/09 IFOOD *RESTAURANTE 54,90</code></p>
-      <textarea id="pasteText" rows="9" placeholder="12/09  UBER *TRIP        23,45&#10;13/09  NETFLIX.COM         55,90&#10;15/09  MAGALU 02/10        120,00"></textarea>
-      <div class="btn-row">
-        <button type="button" id="cancelPaste" class="secondary">Cancelar</button>
-        <button type="submit">Processar</button>
-      </div>
-    </form>
   </dialog>
 
   <dialog id="itemDialog">
     <form id="itemForm" method="dialog">
-      <h2>Item da fatura</h2>
-      <label>Valor (R$)<input name="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label>
-      <label>Descrição<input name="description" placeholder="Ex.: Netflix, Uber, Loja X" autocomplete="off"></label>
-      <label>Categoria<select name="category" id="itemCategory"></select></label>
+      <h2>Gasto no cartão</h2>
+      <p id="itemRemaining" class="hint"></p>
+      <label>Valor (R$)<input name="amount" id="itemAmount" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label>
+      <label>Descrição<input name="description" placeholder="Ex.: Netflix, Uber, Farmácia" autocomplete="off"></label>
+      <label>Categoria<select name="category" id="itemCategory" required></select></label>
+      <div class="toggle">
+        <input type="radio" name="nature" id="iVariable" value="variable" checked><label for="iVariable">Variável</label>
+        <input type="radio" name="nature" id="iFixed" value="fixed"><label for="iFixed">Fixa</label>
+      </div>
       <label>Data da compra<input type="date" name="date"></label>
       <div class="btn-row">
-        <button type="button" id="cancelItem" class="secondary">Cancelar</button>
+        <button type="button" id="cancelItem" class="secondary">Concluir</button>
         <button type="submit">Adicionar</button>
       </div>
     </form>

@@ -608,8 +608,6 @@ const CARD_RULES = [
   ['Moradia', ['condominio', 'aluguel', 'quintoandar', 'quinto andar', 'imobiliaria']],
 ];
 
-const SKIP_LINE = /pagamento|pagto|saldo anterior|total da fatura|total de|limite|vencimento|encargos de|iof de|anuidade diferenciada/i;
-
 function normalizeText(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
@@ -650,121 +648,6 @@ function installmentOf(desc) {
   return n >= 1 && total >= 2 && n <= total && total <= 48 ? `${n}/${total}` : null;
 }
 
-// Valor com sinal, aceitando "1.234,56", "1,234.56", "1234.56", "-R$ 12,30", "12,30-"
-function parseSigned(text) {
-  let s = String(text).trim();
-  const neg = /^-|-$|^\(.*\)$|−/.test(s);
-  s = s.replace(/[^\d.,]/g, '');
-  if (!s) return NaN;
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
-  if (lastComma > -1 && lastDot > -1) {
-    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  } else if (lastComma > -1) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if (lastDot > -1 && s.length - lastDot - 1 !== 2) {
-    s = s.replace(/\./g, '');
-  }
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? Math.round(n * 100) * (neg ? -1 : 1) : NaN;
-}
-
-const MONTHS_PT = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-  feb: 2, apr: 4, may: 5, aug: 8, sep: 9, oct: 10, dec: 12 };
-
-// Converte datas de fatura para AAAA-MM-DD. Sem ano: deduz pelo mês da fatura.
-function parseCardDate(text, refDate) {
-  const t = normalizeText(text).trim();
-  let y, m, d;
-  let r;
-  if ((r = t.match(/^(\d{4})-(\d{2})-(\d{2})/))) [, y, m, d] = r.map(Number);
-  else if ((r = t.match(/^(\d{4})(\d{2})(\d{2})/))) [, y, m, d] = r.map(Number);
-  else if ((r = t.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?/))) { d = +r[1]; m = +r[2]; y = r[3] ? +r[3] : null; }
-  else if ((r = t.match(/^(\d{1,2})\s*(?:de\s*)?([a-z]{3})/)) && MONTHS_PT[r[2]]) { d = +r[1]; m = MONTHS_PT[r[2]]; y = null; }
-  else return null;
-  if (!m || m > 12 || !d || d > 31) return null;
-  const [ry, rm] = refDate.split('-').map(Number);
-  if (!y) y = m > rm ? ry - 1 : ry;
-  if (y < 100) y += 2000;
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-function splitCsvLine(line, delim) {
-  const out = [];
-  let cur = '';
-  let q = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
-    else if (c === delim && !q) { out.push(cur); cur = ''; }
-    else cur += c;
-  }
-  out.push(cur);
-  return out.map((s) => s.trim());
-}
-
-function parseOfx(text, refDate) {
-  const rows = [];
-  const blocks = text.split(/<STMTTRN>/i).slice(1);
-  for (const b of blocks) {
-    const tag = (name) => { const m = b.match(new RegExp(`<${name}>([^<\\r\\n]*)`, 'i')); return m ? m[1].trim() : ''; };
-    const amt = parseSigned(tag('TRNAMT'));
-    const date = parseCardDate(tag('DTPOSTED'), refDate);
-    const desc = tag('MEMO') || tag('NAME');
-    if (!date || Number.isNaN(amt)) continue;
-    rows.push({ date, description: desc, amount: -amt }); // no OFX a compra vem negativa
-  }
-  return rows;
-}
-
-const DATE_TOKEN = /(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?|\d{1,2}\s*(?:de\s*)?(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*\.?)/i;
-const AMOUNT_TOKEN = /(-?\s*(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}-?|-?\s*(?:R\$\s*)?-?\d+[.,]\d{2}-?)\s*$/;
-
-// Linha livre (colada do PDF/site): data no início, valor no fim, descrição no meio.
-function parseFreeLine(line, refDate) {
-  const clean = line.replace(/\t/g, ' ').trim();
-  const dm = clean.match(DATE_TOKEN);
-  const am = clean.match(AMOUNT_TOKEN);
-  if (!dm || !am || dm.index > 3) return null;
-  const date = parseCardDate(dm[0], refDate);
-  const amount = parseSigned(am[1]);
-  if (!date || Number.isNaN(amount)) return null;
-  const description = clean.slice(dm.index + dm[0].length, am.index).replace(/\s{2,}/g, ' ').replace(/^[\s\-–|;,]+|[\s\-–|;,]+$/g, '');
-  return { date, description, amount };
-}
-
-function parseCsv(text, refDate) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-  const first = lines[0];
-  const delim = [';', '\t', ','].map((d) => [d, splitCsvLine(first, d).length]).sort((a, b) => b[1] - a[1])[0][0];
-  const header = splitCsvLine(first, delim).map(normalizeText);
-  const find = (re) => header.findIndex((h) => re.test(h));
-  const iDate = find(/^data|date|dt\b/);
-  const iDesc = find(/descri|lancamento|title|titulo|estabelecimento|historico|memo|nome|loja/);
-  const iAmt = find(/valor|amount|value|quantia|montante/);
-  if (iDate > -1 && iDesc > -1 && iAmt > -1) {
-    return lines.slice(1).map((l) => {
-      const cols = splitCsvLine(l, delim);
-      const date = parseCardDate(cols[iDate] || '', refDate);
-      const amount = parseSigned(cols[iAmt] || '');
-      if (!date || Number.isNaN(amount)) return null;
-      return { date, description: cols[iDesc] || '', amount };
-    }).filter(Boolean);
-  }
-  return lines.map((l) => parseFreeLine(l.split(delim).join(' '), refDate)).filter(Boolean);
-}
-
-function parseStatement(text, refDate) {
-  if (/<STMTTRN>/i.test(text)) return parseOfx(text, refDate);
-  let rows = parseCsv(text, refDate);
-  if (!rows.length) rows = text.split(/\r?\n/).map((l) => parseFreeLine(l, refDate)).filter(Boolean);
-  // Alguns bancos exportam compras como negativas: se a maioria é negativa, inverte.
-  const negatives = rows.filter((r) => r.amount < 0).length;
-  if (negatives > rows.length / 2) rows.forEach((r) => { r.amount = -r.amount; });
-  return rows;
-}
-
 let openCardId = null;
 
 function cardTx() { return state.transactions.find((t) => t.id === openCardId); }
@@ -792,57 +675,23 @@ function expand(list) {
     }
     if (remainder > 0) {
       out.push({ id: `${t.id}-rest`, type: 'expense', category: CARD, amount: remainder, nature: t.nature,
-        date: t.date, description: `${t.description || 'Fatura'} (não detalhado)`, cardId: t.id });
+        date: t.date, description: `${t.description || 'Fatura'} (falta lançar)`, cardId: t.id });
     }
   }
   return out;
 }
 
-function addItems(tx, rows) {
-  const card = ensureCard(tx);
-  let added = 0;
-  let auto = 0;
-  let skipped = 0;
-  for (const r of rows) {
-    if (!r.amount || SKIP_LINE.test(r.description)) { skipped++; continue; }
-    const dup = card.items.some((it) => it.date === r.date && it.amount === r.amount &&
-      normalizeText(it.description) === normalizeText(r.description));
-    if (dup) { skipped++; continue; }
-    const c = classify(r.description);
-    if (c.auto) auto++;
-    card.items.push({
-      id: uid(), date: r.date, description: r.description.trim(), amount: r.amount,
-      category: c.category, nature: c.nature, installment: installmentOf(r.description),
-    });
-    added++;
-  }
-  return { added, auto, skipped };
-}
-
-function importIntoCard(text) {
-  const tx = cardTx();
-  const rows = parseStatement(text, tx.date);
-  if (!rows.length) {
-    toast('Não encontrei itens. Confira se as linhas têm data, descrição e valor.');
-    return;
-  }
-  const { added, auto, skipped } = addItems(tx, rows);
-  save();
-  renderCard();
-  renderAll();
-  toast(`${added} item(ns) importado(s), ${auto} classificado(s) automaticamente${skipped ? ` · ${skipped} ignorado(s)` : ''}`);
-}
-
-function expenseOptions(selected) {
-  const names = state.categories.expense.map((c) => c.name);
-  if (selected && !names.includes(selected)) names.push(selected);
-  return names.map((n) => `<option${n === selected ? ' selected' : ''} value="${escapeHtml(n)}">${n === CARD ? 'A classificar' : escapeHtml(n)}</option>`).join('');
+function expenseOptions(selected, withPlaceholder) {
+  const names = state.categories.expense.map((c) => c.name).filter((n) => n !== CARD);
+  if (selected && selected !== CARD && !names.includes(selected)) names.push(selected);
+  const head = withPlaceholder || selected === CARD
+    ? `<option value="" ${!selected || selected === CARD ? 'selected' : ''} disabled>Escolha a categoria</option>` : '';
+  return head + names.map((n) => `<option${n === selected ? ' selected' : ''} value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
 }
 
 function openCard(id) {
   openCardId = id;
   ensureCard(cardTx());
-  $('#itemFilter').value = '';
   renderCard();
   if (!$('#cardDialog').open) $('#cardDialog').showModal();
 }
@@ -862,31 +711,34 @@ function renderCard() {
 
   const todo = items.filter((it) => it.category === CARD);
   let status;
-  if (!items.length) status = 'Importe ou cole os itens da fatura para ver em que tipo de gasto ela se divide.';
-  else if (remainder > 0) status = `Faltam <b>${money(remainder)}</b> para fechar o total da fatura (juros, IOF, anuidade ou compras não importadas).`;
-  else if (remainder < 0) status = `Os itens somam <b>${money(-remainder)}</b> a mais que o total da fatura. Confira se não há compras de outro mês.`;
-  else status = '✅ Os itens fecham exatamente com o total da fatura.';
-  if (todo.length) status += ` <b>${todo.length}</b> item(ns) ainda a classificar.`;
+  if (remainder > 0) {
+    status = `<span class="big">Falta lançar ${money(remainder)}</span>${items.length ? 'Continue adicionando os gastos da fatura.' : 'Toque em “Adicionar gasto da fatura” para começar.'}`;
+  } else if (remainder < 0) {
+    status = `<span class="big">${money(-remainder)} acima do total</span>Os gastos lançados passam do valor da fatura. Confira os valores.`;
+  } else {
+    status = '<span class="big">✅ Fatura completa</span>Os gastos lançados fecham com o total.';
+  }
+  if (todo.length) status += ` ${todo.length} gasto(s) sem categoria.`;
   $('#cardStatus').innerHTML = status;
   const useSum = $('#useSum');
-  useSum.hidden = !items.length || remainder === 0;
-  useSum.textContent = `Usar a soma dos itens (${money(detailed)}) como total da fatura`;
+  useSum.hidden = remainder >= 0;
+  useSum.textContent = `Corrigir o total da fatura para ${money(detailed)}`;
 
   // Racional: para onde foi o dinheiro da fatura
   const byCat = {};
   items.forEach((it) => { byCat[it.category] = (byCat[it.category] || 0) + it.amount; });
-  if (remainder > 0 && items.length) byCat['Não detalhado'] = remainder;
+  if (remainder > 0 && items.length) byCat['Falta lançar'] = remainder;
   const base = Math.max(tx.amount, detailed);
   const entries = Object.entries(byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   $('#cardBreakdown').innerHTML = entries.length ? entries.map(([name, value]) => {
     const p = (value / base) * 100;
-    const label = name === CARD ? 'A classificar' : name;
-    const color = name === 'Não detalhado' ? OTHER_COLOR : name === CARD ? '#f3c44b' : catColor('expense', name);
+    const label = name === CARD ? 'Sem categoria' : name;
+    const color = name === 'Falta lançar' ? OTHER_COLOR : name === CARD ? '#f3c44b' : catColor('expense', name);
     return `<li><div class="row"><span>${escapeHtml(label)}</span><b>${money(value)} · ${p.toFixed(1).replace('.', ',')}%</b></div>
       <div class="bar"><div style="width:${p}%;background:${color}"></div></div></li>`;
   }).join('') : `<li class="empty">Sem itens ainda.</li>`;
 
-  const real = entries.filter(([n]) => n !== CARD && n !== 'Não detalhado');
+  const real = entries.filter(([n]) => n !== CARD && n !== 'Falta lançar');
   let insight = '';
   if (real.length) {
     const [topName, topVal] = real[0];
@@ -910,8 +762,7 @@ function renderCard() {
   $('#cardFacts').innerHTML = facts.join('');
 
   // Itens
-  const filter = $('#itemFilter').value;
-  const shown = (filter === 'todo' ? todo : items).slice().sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+  const shown = items.slice().sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
   $('#itemCount').textContent = `(${items.length})`;
   $('#cardItems').innerHTML = shown.length ? shown.map((it) => {
     const [, im, idd] = it.date.split('-');
@@ -924,7 +775,7 @@ function renderCard() {
         <button data-item-nature class="${it.nature === 'fixed' ? 'fixed' : ''}">${it.nature === 'fixed' ? 'fixa' : 'variável'}</button>
         <button data-item-del class="del" aria-label="Remover item">✕</button>
       </div></li>`;
-  }).join('') : `<li class="empty-msg">${filter === 'todo' ? 'Tudo classificado 🎉' : 'Nenhum item ainda.'}</li>`;
+  }).join('') : `<li class="empty-msg">Nenhum gasto lançado ainda.</li>`;
 }
 
 function setItemCategory(itemId, category) {
@@ -1289,61 +1140,64 @@ $('#newCard').onclick = () => {
 $('#cardPending').onclick = () => { if ($('#cardPending').dataset.card) openCard($('#cardPending').dataset.card); };
 $('#closeCard').onclick = () => $('#cardDialog').close();
 $('#editCard').onclick = () => openForm(cardTx());
-$('#itemFilter').onchange = renderCard;
 $('#useSum').onclick = () => {
   const tx = cardTx();
   tx.amount = cardStats(tx).detailed;
   save(); renderCard(); renderAll();
   toast('Total da fatura atualizado');
 };
-$('#cardFile').onchange = (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    let text = reader.result;
-    // Arquivos antigos de banco às vezes vêm em Latin-1
-    if (text.includes('\uFFFD')) {
-      const r2 = new FileReader();
-      r2.onload = () => importIntoCard(r2.result);
-      r2.readAsText(file, 'windows-1252');
-      return;
-    }
-    importIntoCard(text);
-  };
-  reader.readAsText(file, 'utf-8');
-};
-$('#pasteBtn').onclick = () => { $('#pasteText').value = ''; $('#pasteDialog').showModal(); };
-$('#cancelPaste').onclick = () => $('#pasteDialog').close();
-$('#pasteForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = $('#pasteText').value;
-  $('#pasteDialog').close();
-  if (text.trim()) importIntoCard(text);
-});
-$('#addItemBtn').onclick = () => {
+
+function remainingText() {
+  const r = cardStats(cardTx()).remainder;
+  return r > 0 ? `Falta lançar <b>${money(r)}</b> desta fatura.` : r === 0 ? 'A fatura já está completa.' : `Já passou <b>${money(-r)}</b> do total.`;
+}
+
+let itemCategoryTouched = false;
+function openItemForm() {
   const f = $('#itemForm');
+  const keepDate = f.date.value;
   f.reset();
-  $('#itemCategory').innerHTML = expenseOptions(CARD);
-  f.date.value = cardTx().date;
-  $('#itemDialog').showModal();
-};
+  itemCategoryTouched = false;
+  $('#itemCategory').innerHTML = expenseOptions(null, true);
+  f.date.value = keepDate || cardTx().date;
+  $('#itemRemaining').innerHTML = remainingText();
+  if (!$('#itemDialog').open) $('#itemDialog').showModal();
+  setTimeout(() => $('#itemAmount').focus(), 50);
+}
+
+$('#addItemBtn').onclick = () => { $('#itemForm').date.value = ''; openItemForm(); };
 $('#cancelItem').onclick = () => $('#itemDialog').close();
+$('#itemCategory').addEventListener('change', () => {
+  itemCategoryTouched = true;
+  if ($('#itemCategory').value === 'Assinaturas') $('#itemForm').nature.value = 'fixed';
+});
+// Sugere a categoria pela descrição (ex.: "Uber" -> Transporte), sem sobrescrever a escolha do usuário
+$('#itemForm').description.addEventListener('input', (e) => {
+  if (itemCategoryTouched) return;
+  const c = classify(e.target.value);
+  if (c.auto) {
+    $('#itemCategory').value = c.category;
+    $('#itemForm').nature.value = c.nature || 'variable';
+  }
+});
 $('#itemForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const f = e.target;
   const amount = parseAmount(f.amount.value);
-  if (!amount) { toast('Informe um valor válido'); return; }
+  if (!amount) { toast('Informe um valor válido'); f.amount.focus(); return; }
+  if (!f.category.value) { toast('Escolha a categoria'); f.category.focus(); return; }
   const tx = cardTx();
   const desc = f.description.value.trim();
-  ensureCard(tx).items.push({
+  const item = {
     id: uid(), date: f.date.value || tx.date, description: desc, amount,
-    category: f.category.value === CARD && desc ? classify(desc).category : f.category.value,
-    nature: f.category.value === 'Assinaturas' ? 'fixed' : 'variable', installment: installmentOf(desc),
-  });
-  $('#itemDialog').close();
+    category: f.category.value, nature: f.nature.value, installment: installmentOf(desc),
+  };
+  ensureCard(tx).items.push(item);
+  const key = merchantKey(desc);
+  if (key) state.rules[key] = { category: item.category, nature: item.nature };
   save(); renderCard(); renderAll();
+  toast(`${money(amount)} em ${item.category} adicionado`);
+  openItemForm(); // já deixa pronto para o próximo gasto
 });
 $('#cardItems').addEventListener('change', (e) => {
   const sel = e.target.closest('[data-item-cat]');
