@@ -28,6 +28,7 @@
   <main>
     <!-- RESUMO -->
     <section id="view-resumo" class="view active">
+      <div id="dueAlert" class="due-alert" hidden></div>
       <div id="backupBanner" class="banner" hidden>
         <span>💾 Faz <b id="backupDays"></b> que você não salva um backup dos seus dados.</span>
         <button id="bannerBackup">Salvar backup</button>
@@ -36,6 +37,16 @@
         <div class="card income"><span>Entradas</span><strong id="totIncome">R$ 0,00</strong></div>
         <div class="card expense"><span>Saídas</span><strong id="totExpense">R$ 0,00</strong></div>
         <div class="card balance"><span>Saldo</span><strong id="totBalance">R$ 0,00</strong></div>
+      </div>
+
+      <div class="panel" id="billsPanel">
+        <div class="bills-head">
+          <h2>📅 Contas fixas do mês</h2>
+          <span id="billsCount" class="muted"></span>
+        </div>
+        <div class="progress"><div id="billsProgress"></div></div>
+        <p id="billsSummary" class="small-note"></p>
+        <ul id="billsList" class="bills"></ul>
       </div>
 
       <div class="panel">
@@ -133,6 +144,21 @@
 
     <!-- CONFIG -->
     <section id="view-config" class="view">
+      <div class="panel">
+        <h2>🔔 Lembretes de vencimento</h2>
+        <p class="muted small-note">Escolha como quer ser avisado no dia em que cada conta fixa vence.</p>
+        <div class="reminder-opt">
+          <div><b>📅 Calendário do celular</b> <span class="badge-rec">mais confiável</span>
+            <small>Cria um evento mensal para cada conta, com alarme às 9h no dia do vencimento. Funciona mesmo com o app fechado.</small></div>
+          <button id="exportIcs">Adicionar ao calendário</button>
+        </div>
+        <div class="reminder-opt">
+          <div><b>🔔 Notificações do app</b>
+            <small id="notifStatus">Avisa quando você abre o app e, no Android com o app instalado, também em segundo plano.</small></div>
+          <button id="enableNotif" class="secondary">Ativar</button>
+        </div>
+        <label class="check-row"><input type="checkbox" id="remindBefore"><span>Avisar também 1 dia antes do vencimento</span></label>
+      </div>
       <div class="panel">
         <h2>🔁 Despesas fixas mensais</h2>
         <p class="muted small-note">Entram sozinhas todo mês. Quando uma deixar de existir, toque em <b>Encerrar</b>: ela some dos meses seguintes e continua nos anteriores.</p>

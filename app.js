@@ -24,6 +24,7 @@ function defaultState() {
     version: SCHEMA_VERSION,
     transactions: [],
     recurring: [],
+    settings: {},
     rules: {},
     categories: {
       expense: DEFAULT_CATEGORIES.expense.map((name, i) => ({ name, color: PALETTE[i % PALETTE.length] })),
@@ -65,6 +66,7 @@ function readSnapshot() {
 // Garante que dados antigos ganhem as novidades (ex.: categoria Delivery).
 function migrate(s) {
   s.rules = s.rules || {};
+  s.settings = s.settings || {};
   if (!s.recurring) migrateFixedToRecurring(s);
   s.version = SCHEMA_VERSION;
   if (!s.categories.expense.some((c) => c.name === CARD)) {
@@ -106,6 +108,7 @@ function migrateFixedToRecurring(s) {
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    syncBillsForWorker();
     // Cópia automática diária (protege contra erro de digitação/exclusão sem querer)
     const snap = readSnapshot();
     if (!snap || snap.date !== todayISO()) {
@@ -893,6 +896,170 @@ function renderRecurring() {
     : `<li class="empty-msg">Nenhuma ainda. Ao lançar um gasto como <b>Fixa</b>, ele aparece aqui e se repete todo mês.</li>`;
 }
 
+// ---------- Contas fixas: vencimento, pagamento e lembretes ----------
+function isBill(t) { return t.type === 'expense' && !!t.recurringId; }
+
+function daysUntil(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  const [ty, tm, td] = todayISO().split('-').map(Number);
+  return Math.round((new Date(y, m - 1, d) - new Date(ty, tm - 1, td)) / 86400000);
+}
+
+function billStatus(t) {
+  if (t.paid) {
+    const pd = t.paidDate ? ` em ${t.paidDate.slice(8, 10)}/${t.paidDate.slice(5, 7)}` : '';
+    return { key: 'paid', text: `Paga${pd}` };
+  }
+  const n = daysUntil(t.date);
+  if (n < 0) return { key: 'late', text: `Atrasada há ${-n} dia(s)` };
+  if (n === 0) return { key: 'today', text: 'Vence hoje' };
+  if (n === 1) return { key: 'soon', text: 'Vence amanhã' };
+  return { key: 'soon', text: `Vence em ${n} dias` };
+}
+
+// Contas não pagas que pedem atenção agora (atrasadas recentes, hoje e, se ativado, amanhã)
+function billsNeedingAttention() {
+  const from = `${shiftMonth(monthKey(todayISO()), -1)}-01`;
+  const ahead = state.settings.remindBefore ? 1 : 0;
+  return state.transactions
+    .filter((t) => isBill(t) && !t.paid && t.date >= from && daysUntil(t.date) <= ahead)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function togglePaid(id) {
+  const t = state.transactions.find((x) => x.id === id);
+  if (!t) return;
+  t.paid = !t.paid;
+  t.paidDate = t.paid ? todayISO() : null;
+  save();
+  renderAll();
+  toast(t.paid ? `✓ ${t.description || t.category} marcada como paga` : 'Marcada como não paga');
+}
+
+function renderBills() {
+  const bills = txOfMonth().filter(isBill).sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description));
+  $('#billsPanel').hidden = !bills.length;
+  if (!bills.length) return;
+  const paid = bills.filter((t) => t.paid);
+  const total = bills.reduce((a, t) => a + t.amount, 0);
+  const paidSum = paid.reduce((a, t) => a + t.amount, 0);
+  $('#billsCount').textContent = `${paid.length} de ${bills.length} pagas`;
+  $('#billsProgress').style.width = `${total ? (paidSum / total) * 100 : 0}%`;
+  $('#billsSummary').innerHTML = paidSum === total
+    ? `✅ Todas as contas do mês pagas (${money(total)}).`
+    : `Pago <b>${money(paidSum)}</b> · falta pagar <b>${money(total - paidSum)}</b>`;
+  $('#billsList').innerHTML = bills.map((t) => {
+    const st = billStatus(t);
+    const [, m, d] = t.date.split('-');
+    return `<li class="${st.key}">
+      <div class="day"><b>${d}</b><small>${monthName(`2000-${m}`, true)}</small></div>
+      <div class="info"><strong>${escapeHtml(t.description || t.category)}</strong><small class="st-${st.key}">${st.text}</small></div>
+      <span class="amt">${money(t.amount)}</span>
+      <button class="pay ${t.paid ? 'done' : ''}" data-pay="${t.id}">${t.paid ? '✓ Paga' : 'Pagar'}</button>
+    </li>`;
+  }).join('');
+}
+
+function renderDueAlert() {
+  const list = billsNeedingAttention();
+  const el = $('#dueAlert');
+  el.hidden = !list.length;
+  if (!list.length) return;
+  const late = list.filter((t) => daysUntil(t.date) < 0);
+  el.classList.toggle('today', !late.length);
+  const title = late.length ? `⚠️ Você tem ${late.length} conta(s) atrasada(s)` : '🔔 Contas para pagar';
+  el.innerHTML = `<b>${title}</b><ul>${list.map((t) => `<li>${escapeHtml(t.description || t.category)} — ${money(t.amount)} · ${billStatus(t).text.toLowerCase()}</li>`).join('')}</ul>
+    <button data-alert-month="${monthKey(list[0].date)}">Ver contas</button>`;
+}
+
+// O service worker não lê o localStorage: guardamos as próximas contas num cache
+// para ele poder avisar em segundo plano (Android, app instalado).
+function syncBillsForWorker() {
+  if (!('caches' in window)) return;
+  const bills = state.transactions
+    .filter((t) => isBill(t) && !t.paid && daysUntil(t.date) >= -1 && daysUntil(t.date) <= 62)
+    .map((t) => ({ id: t.id, description: t.description || t.category, amount: t.amount, date: t.date }));
+  const body = JSON.stringify({ bills, remindBefore: !!state.settings.remindBefore });
+  caches.open('fingui-dados').then((c) => c.put('./contas.json', new Response(body, { headers: { 'Content-Type': 'application/json' } }))).catch(() => {});
+  if (navigator.setAppBadge) {
+    const n = billsNeedingAttention().filter((t) => daysUntil(t.date) <= 0).length;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  }
+}
+
+async function notifyDueBills() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const today = todayISO();
+  const sent = state.settings.notified && state.settings.notified.date === today ? state.settings.notified.ids : [];
+  const pending = billsNeedingAttention().filter((t) => !sent.includes(t.id));
+  if (!pending.length) return;
+  const reg = await navigator.serviceWorker?.getRegistration();
+  for (const t of pending) {
+    const title = `${billStatus(t).text}: ${t.description || t.category}`;
+    const opts = { body: `${money(t.amount)} · toque para abrir o FinGui`, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: `conta-${t.id}` };
+    try { if (reg) await reg.showNotification(title, opts); else new Notification(title, opts); } catch { /* ignora */ }
+  }
+  state.settings.notified = { date: today, ids: [...sent, ...pending.map((t) => t.id)] };
+  save();
+}
+
+async function setupBackgroundCheck() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (reg.periodicSync) await reg.periodicSync.register('fingui-contas', { minInterval: 12 * 60 * 60 * 1000 });
+  } catch { /* não suportado: os avisos ficam ao abrir o app e pelo calendário */ }
+}
+
+function renderNotifStatus() {
+  const el = $('#notifStatus');
+  const btn = $('#enableNotif');
+  $('#remindBefore').checked = !!state.settings.remindBefore;
+  if (!('Notification' in window)) {
+    el.textContent = 'Este navegador não permite notificações. No iPhone, instale o app na tela inicial (iOS 16.4+) ou use o calendário.';
+    btn.hidden = true;
+    return;
+  }
+  const p = Notification.permission;
+  btn.hidden = p === 'granted';
+  btn.textContent = 'Ativar';
+  el.textContent = p === 'granted'
+    ? '✅ Ativadas. Você é avisado ao abrir o app; com o app instalado no Android, também em segundo plano.'
+    : p === 'denied'
+      ? 'Bloqueadas no navegador. Libere em Configurações do site → Notificações.'
+      : 'Avisa quando você abre o app e, no Android com o app instalado, também em segundo plano.';
+}
+
+// Arquivo .ics: um evento mensal por conta fixa, com alarme às 9h do vencimento
+function exportIcs() {
+  const rules = state.recurring.filter((r) => !r.endMonth);
+  if (!rules.length) { toast('Nenhuma despesa fixa ativa'); return; }
+  const pad = (n) => String(n).padStart(2, '0');
+  const esc = (s) => String(s).replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, ' ');
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FinGui//Contas//PT-BR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:FinGui - Contas'];
+  for (const r of rules) {
+    let m = monthKey(todayISO());
+    if (r.startMonth > m) m = r.startMonth;
+    const day = r.day;
+    const first = `${m.replace('-', '')}${pad(Math.min(day, daysInMonth(m)))}`;
+    const name = r.description || r.category;
+    lines.push('BEGIN:VEVENT', `UID:fingui-${r.id}@fingui`, `DTSTAMP:${stamp}`,
+      `DTSTART:${first}T090000`, `DTEND:${first}T093000`,
+      day > 28 ? 'RRULE:FREQ=MONTHLY;BYMONTHDAY=-1' : `RRULE:FREQ=MONTHLY;BYMONTHDAY=${day}`,
+      `SUMMARY:${esc(`💰 Vence: ${name} (${money(r.amount)})`)}`,
+      `DESCRIPTION:${esc(`Conta fixa do FinGui - ${r.category}. Depois de pagar\, marque como paga no app.`)}`,
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(`Vence hoje: ${name}`)}`, 'TRIGGER:PT0M', 'END:VALARM');
+    if (state.settings.remindBefore) {
+      lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(`Vence amanhã: ${name}`)}`, 'TRIGGER:-P1D', 'END:VALARM');
+    }
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  download('fingui-contas.ics', lines.join('\r\n'), 'text/calendar;charset=utf-8');
+  toast('Abra o arquivo baixado para adicionar ao calendário');
+}
+
 let recurTarget = null;
 function askDeleteRecurring(tx) {
   recurTarget = tx;
@@ -932,7 +1099,12 @@ function renderList() {
     let tag = t.type === 'expense'
       ? `<span class="tag ${t.nature}">${t.nature === 'fixed' ? 'fixa' : 'variável'}</span>` : '';
     if (t.fee) tag += `<span class="tag fee">taxa ${money(t.fee)}</span>`;
-    if (t.recurringId) tag = tag.replace('>fixa<', '>🔁 fixa mensal<');
+    if (t.recurringId) {
+      tag = tag.replace('>fixa<', '>🔁 fixa mensal<');
+      const st = billStatus(t);
+      const cls = st.key === 'paid' ? 'paid' : st.key === 'late' ? 'late' : 'due';
+      tag += `<span class="tag ${cls}">${st.key === 'paid' ? '✓ paga' : `vence ${t.date.slice(8, 10)}/${t.date.slice(5, 7)}`}</span>`;
+    }
     if (t.card) {
       const st = cardStats(t);
       const done = t.amount ? Math.min(100, Math.round((st.classified / t.amount) * 100)) : 0;
@@ -1155,11 +1327,14 @@ function renderAll() {
   ensureRecurring(recurringHorizon());
   $('#monthLabel').textContent = monthName(currentMonth);
   renderResumo();
+  renderBills();
+  renderDueAlert();
   renderInsights();
   renderCategoryFilter();
   renderList();
   renderCategories();
   renderRecurring();
+  renderNotifStatus();
   renderBackupBanner();
 }
 
@@ -1401,6 +1576,40 @@ async function protectStorage() {
 }
 protectStorage();
 
+$('#billsList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pay]');
+  if (b) togglePaid(b.dataset.pay);
+});
+$('#dueAlert').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-alert-month]');
+  if (!b) return;
+  currentMonth = b.dataset.alertMonth;
+  renderAll();
+  $('#billsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+$('#exportIcs').onclick = exportIcs;
+$('#remindBefore').onchange = (e) => {
+  state.settings.remindBefore = e.target.checked;
+  save();
+  renderAll();
+};
+$('#enableNotif').onclick = async () => {
+  if (!('Notification' in window)) return;
+  const p = await Notification.requestPermission();
+  renderNotifStatus();
+  if (p === 'granted') {
+    setupBackgroundCheck();
+    toast('Notificações ativadas');
+    notifyDueBills();
+  }
+};
+// Ao abrir o app (ou voltar para ele) confere o que vence hoje
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  renderAll();
+  notifyDueBills();
+});
+
 // Atalho: abrir direto o formulário via ?novo (usado pelo atalho do app instalado)
 if (new URLSearchParams(location.search).has('novo')) setTimeout(() => openForm(), 100);
 
@@ -1415,3 +1624,7 @@ window.addEventListener('resize', () => {
 });
 
 renderAll();
+if ('Notification' in window && Notification.permission === 'granted') {
+  notifyDueBills();
+  setupBackgroundCheck();
+}

@@ -336,3 +336,47 @@ button.danger { background: var(--expense-text); color: #fff; }
 .recurring-list button { padding: 6px 10px; font-size: .8rem; background: var(--bg); color: var(--expense-text); border: 1px solid var(--border); }
 .recurring-list li.ended { opacity: .55; }
 .tag.recur { background: #ecebf8; color: var(--fixed); }
+
+/* ---------- Contas e vencimentos ---------- */
+.due-alert { background: #fdecec; border: 1px solid #f5c2c1; border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; font-size: .88rem; }
+.due-alert[hidden] { display: none; }
+.due-alert.today { background: #fff8e6; border-color: #f3dfa6; }
+.due-alert ul { margin: 4px 0 0; padding-left: 18px; }
+.due-alert button { margin-top: 8px; padding: 7px 12px; font-size: .82rem; }
+.bills-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.bills-head h2 { margin-bottom: 8px; }
+#billsPanel[hidden] { display: none; }
+.bills { list-style: none; margin: 10px 0 0; padding: 0; }
+.bills li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--grid); }
+.bills li:last-child { border-bottom: 0; }
+.bills .day { width: 44px; flex-shrink: 0; text-align: center; border-radius: 10px; background: var(--bg); padding: 4px 0; line-height: 1.1; }
+.bills .day b { display: block; font-size: 1.1rem; }
+.bills .day small { font-size: .68rem; color: var(--text-2); text-transform: uppercase; }
+.bills .info { flex: 1; min-width: 0; }
+.bills .info strong { display: block; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bills .info small { font-size: .78rem; }
+.bills .amt { font-weight: 700; white-space: nowrap; font-size: .92rem; }
+.bills .pay { padding: 7px 10px; font-size: .8rem; white-space: nowrap; }
+.bills .pay.done { background: #e7f6ef; color: var(--income-text); }
+.bills li.paid .info strong, .bills li.paid .amt { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--muted); }
+.bills li.paid .day { background: #e7f6ef; color: var(--income-text); }
+.bills li.late .day { background: #fdecec; color: var(--expense-text); }
+.bills li.today .day { background: #fff4d6; color: #8a5d00; }
+.st-paid { color: var(--income-text); }
+.st-late { color: var(--expense-text); font-weight: 600; }
+.st-today { color: #8a5d00; font-weight: 600; }
+.st-soon { color: var(--text-2); }
+.reminder-opt { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+.reminder-opt > div { flex: 1; }
+.reminder-opt small { display: block; color: var(--text-2); font-size: .78rem; margin-top: 2px; }
+.reminder-opt button { padding: 8px 10px; font-size: .8rem; white-space: nowrap; }
+.badge-rec { font-size: .66rem; background: #e7f6ef; color: var(--income-text); padding: 1px 6px; border-radius: 6px; vertical-align: middle; }
+.reminder-opt + .check-row { margin-top: 10px; }
+.tag.paid { background: #e7f6ef; color: var(--income-text); }
+.tag.due { background: #fff4d6; color: #8a5d00; }
+.tag.late { background: #fdecec; color: var(--expense-text); }
+label.check-row { display: flex; }
+.reminder-opt { flex-wrap: wrap; }
+.reminder-opt > div { flex: 1 1 220px; }
+.reminder-opt button { flex: 0 0 auto; margin-left: auto; }
+.recurring-list li.empty-msg { display: block; }
