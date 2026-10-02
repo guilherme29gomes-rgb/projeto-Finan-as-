@@ -10,7 +10,7 @@ const OTHER_COLOR = '#b9b8b2';
 
 const DELIVERY = 'Delivery';
 const CARD = 'Cartão de crédito';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const SNAPSHOT_KEY = `${STORAGE_KEY}.copia-automatica`;
 
 const DEFAULT_CATEGORIES = {
@@ -23,6 +23,7 @@ function defaultState() {
   return {
     version: SCHEMA_VERSION,
     transactions: [],
+    recurring: [],
     rules: {},
     categories: {
       expense: DEFAULT_CATEGORIES.expense.map((name, i) => ({ name, color: PALETTE[i % PALETTE.length] })),
@@ -64,6 +65,7 @@ function readSnapshot() {
 // Garante que dados antigos ganhem as novidades (ex.: categoria Delivery).
 function migrate(s) {
   s.rules = s.rules || {};
+  if (!s.recurring) migrateFixedToRecurring(s);
   s.version = SCHEMA_VERSION;
   if (!s.categories.expense.some((c) => c.name === CARD)) {
     const used = new Set(s.categories.expense.map((c) => c.color));
@@ -76,7 +78,30 @@ function migrate(s) {
   return s;
 }
 
-let state = loadState();
+// Converte despesas fixas antigas (lançadas mês a mês ou copiadas) em recorrências.
+function migrateFixedToRecurring(s) {
+  s.recurring = [];
+  const groups = {};
+  for (const t of s.transactions) {
+    if (t.type !== 'expense' || t.nature !== 'fixed' || t.card || t.category === CARD) continue;
+    const key = `${t.category}|${normalizeText(t.description)}`;
+    (groups[key] = groups[key] || []).push(t);
+  }
+  for (const list of Object.values(groups)) {
+    list.sort((a, b) => a.date.localeCompare(b.date));
+    const last = list[list.length - 1];
+    const rule = {
+      id: uid(), description: last.description, category: last.category, amount: last.amount,
+      day: Number(last.date.slice(8, 10)), startMonth: monthKey(list[0].date), endMonth: null, skipped: [],
+    };
+    const had = new Set(list.map((t) => monthKey(t.date)));
+    // meses do passado sem lançamento não são inventados
+    for (let m = rule.startMonth; m < monthKey(last.date); m = shiftMonth(m, 1)) if (!had.has(m)) rule.skipped.push(m);
+    list.forEach((t) => { t.recurringId = rule.id; });
+    s.recurring.push(rule);
+  }
+}
+
 
 function save() {
   try {
@@ -148,6 +173,10 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
+
+// Carrega os dados (depois das utilidades, que a migração usa)
+let state = loadState();
+save(); // grava já no formato atual (inclusive dados convertidos de versões antigas)
 
 // ---------- Estado da tela ----------
 let currentMonth = monthKey(todayISO());
@@ -807,6 +836,72 @@ function setItemCategory(itemId, category) {
   if (same) toast(`Também classifiquei ${same} compra(s) igual(is) como ${category}`);
 }
 
+// ---------- Despesas fixas mensais (recorrências) ----------
+// Cada despesa fixa é uma regra que gera um lançamento por mês, do mês em que foi criada
+// até o mês em que foi encerrada. Encerrar remove só os meses seguintes; o passado fica.
+function recurringDate(rule, month) {
+  return `${month}-${String(Math.min(rule.day, daysInMonth(month))).padStart(2, '0')}`;
+}
+
+function ensureRecurring(upTo) {
+  let changed = false;
+  for (const rule of state.recurring) {
+    const last = rule.endMonth && rule.endMonth < upTo ? rule.endMonth : upTo;
+    for (let m = rule.startMonth; m <= last; m = shiftMonth(m, 1)) {
+      if (rule.skipped.includes(m)) continue;
+      if (state.transactions.some((t) => t.recurringId === rule.id && monthKey(t.date) === m)) continue;
+      state.transactions.push({
+        id: uid(), createdAt: Date.now(), type: 'expense', amount: rule.amount, description: rule.description,
+        category: rule.category, nature: 'fixed', date: recurringDate(rule, m), fee: null, recurringId: rule.id,
+      });
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+
+function recurringHorizon() {
+  const real = monthKey(todayISO());
+  return currentMonth > real ? currentMonth : real;
+}
+
+// Encerra a recorrência: o último mês com a despesa passa a ser `lastMonth`.
+function endRecurring(rule, lastMonth) {
+  state.transactions = state.transactions.filter((t) => !(t.recurringId === rule.id && monthKey(t.date) > lastMonth));
+  if (lastMonth < rule.startMonth) state.recurring = state.recurring.filter((r) => r !== rule);
+  else rule.endMonth = lastMonth;
+}
+
+function findRule(id) { return state.recurring.find((r) => r.id === id); }
+
+function renderRecurring() {
+  const active = state.recurring.filter((r) => !r.endMonth);
+  const ended = state.recurring.filter((r) => !active.includes(r));
+  const total = active.reduce((a, r) => a + r.amount, 0);
+  const row = (r, isEnded) => `<li class="${isEnded ? 'ended' : ''}">
+      <i class="dot" style="background:${catColor('expense', r.category)}"></i>
+      <div class="info"><strong>${escapeHtml(r.description || r.category)}</strong>
+        <small>${escapeHtml(r.category)} · todo dia ${r.day} · desde ${monthName(r.startMonth, true)}/${r.startMonth.slice(0, 4)}${
+          r.endMonth ? ` · até ${monthName(r.endMonth, true)}/${r.endMonth.slice(0, 4)}` : ''}</small></div>
+      <span class="amt">${money(r.amount)}</span>
+      ${isEnded ? '' : `<button data-end-rule="${r.id}">Encerrar</button>`}
+    </li>`;
+  $('#recurringList').innerHTML = active.length || ended.length
+    ? active.map((r) => row(r, false)).join('') +
+      (active.length ? `<li><div class="info"><strong>Total fixo por mês</strong></div><span class="amt">${money(total)}</span></li>` : '') +
+      ended.map((r) => row(r, true)).join('')
+    : `<li class="empty-msg">Nenhuma ainda. Ao lançar um gasto como <b>Fixa</b>, ele aparece aqui e se repete todo mês.</li>`;
+}
+
+let recurTarget = null;
+function askDeleteRecurring(tx) {
+  recurTarget = tx;
+  const m = monthKey(tx.date);
+  $('#recurText').innerHTML = `<b>${escapeHtml(tx.description || tx.category)}</b> (${money(tx.amount)}) se repete todo mês. ` +
+    `Se ela deixou de existir, será removida de ${monthName(m)} em diante; os meses anteriores continuam registrados.`;
+  $('#recurDialog').showModal();
+}
+
 // ---------- Lançamentos ----------
 function renderList() {
   const type = $('#filterType').value;
@@ -837,6 +932,7 @@ function renderList() {
     let tag = t.type === 'expense'
       ? `<span class="tag ${t.nature}">${t.nature === 'fixed' ? 'fixa' : 'variável'}</span>` : '';
     if (t.fee) tag += `<span class="tag fee">taxa ${money(t.fee)}</span>`;
+    if (t.recurringId) tag = tag.replace('>fixa<', '>🔁 fixa mensal<');
     if (t.card) {
       const st = cardStats(t);
       const done = t.amount ? Math.min(100, Math.round((st.classified / t.amount) * 100)) : 0;
@@ -884,6 +980,7 @@ function fillCategorySelect(type, selected) {
   }
   $('#natureRow').style.display = type === 'expense' ? '' : 'none';
   updateFeeRow();
+  updateRepeatRow();
 }
 
 function updateFeeRow() {
@@ -892,6 +989,16 @@ function updateFeeRow() {
   const isCard = isExpense && $('#category').value === CARD;
   $('#cardHint').hidden = !isCard;
   $('#txForm').description.placeholder = isCard ? 'Ex.: Nubank, Itaú Visa' : 'Ex.: Mercado, Uber, iFood';
+}
+
+function updateRepeatRow() {
+  const f = $('#txForm');
+  const show = f.type.value === 'expense' && f.nature.value === 'fixed' && $('#category').value !== CARD;
+  $('#repeatRow').hidden = !show;
+  const editingRecurring = editingId && state.transactions.find((t) => t.id === editingId)?.recurringId;
+  $('#repeatHint').textContent = editingRecurring
+    ? '— alterações valem para este mês e os próximos'
+    : '— entra automaticamente nos próximos meses';
 }
 
 function openForm(tx) {
@@ -908,8 +1015,10 @@ function openForm(tx) {
     form.description.value = tx.description || '';
     form.nature.value = tx.nature || 'variable';
     if (tx.fee) form.fee.value = (tx.fee / 100).toFixed(2).replace('.', ',');
+    form.repeat.checked = !!tx.recurringId || !(tx.nature === 'fixed');
   }
   updateFeeRow();
+  updateRepeatRow();
   $('#txDialog').showModal();
   setTimeout(() => $('#amount').focus(), 50);
 }
@@ -943,15 +1052,33 @@ function submitForm(e) {
     fee,
   };
 
+  const wantsRepeat = type === 'expense' && data.nature === 'fixed' && data.category !== CARD && form.repeat.checked;
   let openCardAfter = null;
   if (editingId) {
     const tx = state.transactions.find((t) => t.id === editingId);
+    const rule = tx.recurringId && findRule(tx.recurringId);
+    const month = monthKey(data.date);
     Object.assign(tx, data);
+    if (rule && wantsRepeat) {
+      // A alteração vale deste mês em diante; os meses anteriores ficam como estavam
+      Object.assign(rule, { amount: data.amount, description: data.description, category: data.category, day: Number(data.date.slice(8, 10)) });
+      state.transactions.forEach((t) => {
+        if (t.recurringId === rule.id && t !== tx && monthKey(t.date) > month) {
+          Object.assign(t, { amount: rule.amount, description: rule.description, category: rule.category, date: recurringDate(rule, monthKey(t.date)) });
+        }
+      });
+    } else if (rule && !wantsRepeat) {
+      endRecurring(rule, month); // parou de repetir: fica só até este mês
+    } else if (!rule && wantsRepeat) {
+      const r = newRule(data);
+      tx.recurringId = r.id;
+    }
     if (data.category !== CARD && tx.card && !tx.card.items.length) delete tx.card;
     toast('Lançamento atualizado');
     if (tx.card && $('#cardDialog').open) openCardAfter = tx.id;
   } else {
     const tx = { id: uid(), createdAt: Date.now(), ...data };
+    if (wantsRepeat) tx.recurringId = newRule(data).id;
     if (type === 'expense' && data.category === CARD) {
       tx.card = { items: [] };
       openCardAfter = tx.id;
@@ -966,32 +1093,13 @@ function submitForm(e) {
   if (openCardAfter) openCard(openCardAfter);
 }
 
-function copyFixedFromPrevious() {
-  const prev = shiftMonth(currentMonth, -1);
-  const fixed = txOfMonth(prev).filter((t) => t.type === 'expense' && t.nature === 'fixed');
-  if (!fixed.length) {
-    toast(`Nenhuma despesa fixa em ${monthName(prev)}`);
-    return;
-  }
-  const existing = txOfMonth();
-  const [y, m] = currentMonth.split('-').map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
-  let added = 0;
-  for (const t of fixed) {
-    const dup = existing.some((e) => e.type === 'expense' && e.nature === 'fixed' &&
-      e.category === t.category && e.description === t.description);
-    if (dup) continue;
-    const day = Math.min(Number(t.date.slice(8, 10)), lastDay);
-    const { card, ...rest } = t;
-    state.transactions.push({
-      ...rest, id: uid(), createdAt: Date.now(),
-      date: `${currentMonth}-${String(day).padStart(2, '0')}`,
-    });
-    added++;
-  }
-  save();
-  renderAll();
-  toast(added ? `${added} despesa(s) fixa(s) copiada(s)` : 'As despesas fixas já estão lançadas');
+function newRule(data) {
+  const rule = {
+    id: uid(), description: data.description, category: data.category, amount: data.amount,
+    day: Number(data.date.slice(8, 10)), startMonth: monthKey(data.date), endMonth: null, skipped: [],
+  };
+  state.recurring.push(rule);
+  return rule;
 }
 
 // ---------- Backup ----------
@@ -1044,12 +1152,14 @@ function importJson(file) {
 
 // ---------- Render geral ----------
 function renderAll() {
+  ensureRecurring(recurringHorizon());
   $('#monthLabel').textContent = monthName(currentMonth);
   renderResumo();
   renderInsights();
   renderCategoryFilter();
   renderList();
   renderCategories();
+  renderRecurring();
   renderBackupBanner();
 }
 
@@ -1069,7 +1179,7 @@ document.querySelectorAll('.tabbar button').forEach((btn) => {
 $('#fab').onclick = () => openForm();
 $('#cancelTx').onclick = () => $('#txDialog').close();
 $('#txForm').addEventListener('submit', submitForm);
-$('#category').addEventListener('change', updateFeeRow);
+$('#category').addEventListener('change', () => { updateFeeRow(); updateRepeatRow(); });
 document.querySelectorAll('#txForm input[name="type"]').forEach((r) => {
   r.onchange = () => fillCategorySelect(r.value);
 });
@@ -1078,6 +1188,8 @@ $('#txList').addEventListener('click', (e) => {
   const del = e.target.closest('[data-del]');
   if (del) {
     e.stopPropagation();
+    const target = state.transactions.find((t) => t.id === del.dataset.del);
+    if (target && target.recurringId) { askDeleteRecurring(target); return; }
     if (confirm('Excluir este lançamento?')) {
       state.transactions = state.transactions.filter((t) => t.id !== del.dataset.del);
       save();
@@ -1094,7 +1206,39 @@ $('#txList').addEventListener('click', (e) => {
 
 ['#filterType', '#filterCategory'].forEach((s) => $(s).addEventListener('change', renderList));
 $('#search').addEventListener('input', renderList);
-$('#copyFixed').onclick = copyFixedFromPrevious;
+$('#recurringList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-end-rule]');
+  if (!btn) return;
+  const rule = findRule(btn.dataset.endRule);
+  const real = monthKey(todayISO());
+  const next = shiftMonth(real, 1);
+  if (!confirm(`Encerrar "${rule.description || rule.category}"?\n\nEla continua registrada até ${monthName(real)} e some a partir de ${monthName(next)}.`)) return;
+  endRecurring(rule, real);
+  save();
+  renderAll();
+  toast('Despesa fixa encerrada');
+});
+$('#recurOnlyThis').onclick = () => {
+  const tx = recurTarget;
+  const rule = findRule(tx.recurringId);
+  if (rule) rule.skipped.push(monthKey(tx.date));
+  state.transactions = state.transactions.filter((t) => t !== tx);
+  $('#recurDialog').close();
+  save(); renderAll();
+  toast(`Removida só de ${monthName(monthKey(tx.date))}`);
+};
+$('#recurFromHere').onclick = () => {
+  const tx = recurTarget;
+  const rule = findRule(tx.recurringId);
+  const m = monthKey(tx.date);
+  if (rule) endRecurring(rule, shiftMonth(m, -1));
+  else state.transactions = state.transactions.filter((t) => t !== tx);
+  $('#recurDialog').close();
+  save(); renderAll();
+  toast(`Removida de ${monthName(m)} em diante`);
+};
+$('#recurCancel').onclick = () => $('#recurDialog').close();
+document.querySelectorAll('#txForm input[name="nature"]').forEach((r) => r.addEventListener('change', updateRepeatRow));
 
 document.querySelectorAll('.inline-form').forEach((form) => {
   form.addEventListener('submit', (e) => {

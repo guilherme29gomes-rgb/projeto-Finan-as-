@@ -11,7 +11,7 @@ App simples de controle financeiro pessoal (PWA). Funciona no navegador do celul
 - **Delivery**: categoria própria, com campo opcional de taxa de entrega. Mostra total gasto, nº de pedidos, ticket médio e quanto foi só de taxa.
 - **Insights (gráficos)**: gasto médio por dia e projeção do mês, rosca de gastos por categoria, ritmo de gastos comparado ao mês anterior, variação por categoria, entradas x saídas em 6 meses, gastos por dia da semana e os 5 maiores gastos. Toque nos gráficos para ver os valores.
 - **Fatura do cartão**: lance o valor total da fatura e vá adicionando manualmente cada gasto dela, com a categoria. O app mostra quanto falta lançar, sugere a categoria pela descrição (Uber → Transporte, Netflix → Assinaturas…) e lembra das suas escolhas. A tela "Racional da fatura" mostra para onde foi o dinheiro, e nos resumos e gráficos cada gasto conta na sua categoria real.
-- **Copiar fixas**: um botão repete as despesas fixas do mês anterior no mês atual.
+- **Despesas fixas mensais**: ao lançar um gasto como **Fixa** (com "Repetir todo mês"), ele entra sozinho em todos os meses seguintes. Se mudar de valor, edite em qualquer mês e a mudança vale dali em diante. Se deixar de existir, exclua e escolha **"Deixou de existir"** (ou use **Ajustes → Despesas fixas mensais → Encerrar**): ela some dos meses seguintes e continua registrada nos anteriores. Para pular só um mês, escolha **"Só deste mês"**.
 - **Lançamentos**: lista por dia, com filtros (tipo, fixa/variável, categoria) e busca. Toque num item para editar e na 🗑 para excluir.
 - **Ajustes**: crie ou remova categorias, faça backup (JSON) e exporte para planilha (CSV, abre no Excel/Google Sheets).
 

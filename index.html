@@ -127,13 +127,17 @@
       <input id="search" type="search" placeholder="Buscar descrição...">
       <div class="btn-row list-actions">
         <button id="newCard" class="secondary">💳 Lançar fatura do cartão</button>
-        <button id="copyFixed" class="secondary">↻ Copiar fixas do mês anterior</button>
       </div>
       <ul id="txList" class="tx-list"></ul>
     </section>
 
     <!-- CONFIG -->
     <section id="view-config" class="view">
+      <div class="panel">
+        <h2>🔁 Despesas fixas mensais</h2>
+        <p class="muted small-note">Entram sozinhas todo mês. Quando uma deixar de existir, toque em <b>Encerrar</b>: ela some dos meses seguintes e continua nos anteriores.</p>
+        <ul id="recurringList" class="recurring-list"></ul>
+      </div>
       <div class="panel">
         <h2>Categorias de gasto</h2>
         <ul id="expenseCats" class="cat-list"></ul>
@@ -200,6 +204,10 @@
         <input type="radio" name="nature" id="nVariable" value="variable" checked><label for="nVariable">Variável</label>
         <input type="radio" name="nature" id="nFixed" value="fixed"><label for="nFixed">Fixa</label>
       </div>
+      <label id="repeatRow" class="check-row" hidden>
+        <input type="checkbox" name="repeat" id="repeat" checked>
+        <span>🔁 Repetir todo mês <small id="repeatHint">— entra automaticamente nos próximos meses</small></span>
+      </label>
       <label>Data
         <input type="date" name="date" required>
       </label>
@@ -261,6 +269,18 @@
         <button type="submit">Adicionar</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="recurDialog">
+    <div class="dialog-body">
+      <h2>Excluir despesa fixa</h2>
+      <p id="recurText" class="muted"></p>
+      <div class="stack">
+        <button id="recurOnlyThis" class="secondary">Só deste mês</button>
+        <button id="recurFromHere" class="danger">Deixou de existir (remover deste mês em diante)</button>
+        <button id="recurCancel" class="link-btn">Cancelar</button>
+      </div>
+    </div>
   </dialog>
 
   <div id="tooltip" class="tooltip" role="status"></div>

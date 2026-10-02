@@ -1,5 +1,5 @@
 // Service worker: permite usar o app offline depois do primeiro acesso.
-const CACHE = 'fingui-v5';
+const CACHE = 'fingui-v6';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
