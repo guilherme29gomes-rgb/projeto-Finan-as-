@@ -16,7 +16,7 @@ const SNAPSHOT_KEY = `${STORAGE_KEY}.copia-automatica`;
 const DEFAULT_CATEGORIES = {
   expense: ['Moradia', 'Alimentação', DELIVERY, 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer',
     'Assinaturas', 'Contas (luz, água, internet)', 'Compras', 'Cartão de crédito', 'Outros'],
-  income: ['Salário', 'Freelance', 'Investimentos', 'Vendas', 'Outros'],
+  income: ['Salário', 'Adiantamento salarial', 'Férias', '13º salário', 'Bônus/PLR', 'Freelance', 'Investimentos', 'Vendas', 'Outros'],
 };
 
 function defaultState() {
@@ -67,6 +67,13 @@ function readSnapshot() {
 function migrate(s) {
   s.rules = s.rules || {};
   s.settings = s.settings || {};
+  for (const name of ['Adiantamento salarial', 'Férias', '13º salário', 'Bônus/PLR']) {
+    if (!s.categories.income.some((c) => c.name === name)) {
+      const used = new Set(s.categories.income.map((c) => c.color));
+      const idx = Math.min(1 + s.categories.income.findIndex((c) => c.name === 'Salário'), s.categories.income.length);
+      s.categories.income.splice(Math.max(idx, 0), 0, { name, color: PALETTE.find((p) => !used.has(p)) || '#1baf7a' });
+    }
+  }
   if (!s.recurring) migrateFixedToRecurring(s);
   s.version = SCHEMA_VERSION;
   if (!s.categories.expense.some((c) => c.name === CARD)) {
@@ -224,6 +231,8 @@ function renderResumo() {
   const balance = income - expense;
 
   $('#totIncome').textContent = money(income);
+  const expectedSum = sumBy(txOfMonth(), (t) => t.type === 'income' && t.expected);
+  $('#totExpected').textContent = expectedSum ? `+ ${money(expectedSum)} a receber` : '';
   $('#totExpense').textContent = money(expense);
   $('#totBalance').textContent = money(balance);
   $('#totBalance').classList.toggle('neg', balance < 0);
@@ -700,6 +709,7 @@ function cardStats(tx) {
 function expand(list) {
   const out = [];
   for (const t of list) {
+    if (t.expected) continue; // entrada prevista ainda não recebida: fica fora dos totais reais
     if (!(t.type === 'expense' && t.card && t.card.items.length)) { out.push(t); continue; }
     const { remainder } = cardStats(t);
     for (const it of t.card.items) {
@@ -853,9 +863,11 @@ function ensureRecurring(upTo) {
     for (let m = rule.startMonth; m <= last; m = shiftMonth(m, 1)) {
       if (rule.skipped.includes(m)) continue;
       if (state.transactions.some((t) => t.recurringId === rule.id && monthKey(t.date) === m)) continue;
+      const isIncome = rule.type === 'income';
       state.transactions.push({
-        id: uid(), createdAt: Date.now(), type: 'expense', amount: rule.amount, description: rule.description,
-        category: rule.category, nature: 'fixed', date: recurringDate(rule, m), fee: null, recurringId: rule.id,
+        id: uid(), createdAt: Date.now(), type: isIncome ? 'income' : 'expense', amount: rule.amount, description: rule.description,
+        category: rule.category, nature: isIncome ? null : 'fixed', date: recurringDate(rule, m), fee: null, recurringId: rule.id,
+        ...(isIncome ? { expected: true } : {}),
       });
       changed = true;
     }
@@ -880,20 +892,22 @@ function findRule(id) { return state.recurring.find((r) => r.id === id); }
 function renderRecurring() {
   const active = state.recurring.filter((r) => !r.endMonth);
   const ended = state.recurring.filter((r) => !active.includes(r));
-  const total = active.reduce((a, r) => a + r.amount, 0);
+  const total = active.filter((r) => r.type !== 'income').reduce((a, r) => a + r.amount, 0);
+  const totalIn = active.filter((r) => r.type === 'income').reduce((a, r) => a + r.amount, 0);
   const row = (r, isEnded) => `<li class="${isEnded ? 'ended' : ''}">
-      <i class="dot" style="background:${catColor('expense', r.category)}"></i>
+      <i class="dot" style="background:${catColor(r.type === 'income' ? 'income' : 'expense', r.category)}"></i>
       <div class="info"><strong>${escapeHtml(r.description || r.category)}</strong>
         <small>${escapeHtml(r.category)} · todo dia ${r.day} · desde ${monthName(r.startMonth, true)}/${r.startMonth.slice(0, 4)}${
           r.endMonth ? ` · até ${monthName(r.endMonth, true)}/${r.endMonth.slice(0, 4)}` : ''}</small></div>
-      <span class="amt">${money(r.amount)}</span>
+      <span class="amt" ${r.type === 'income' ? 'style="color:var(--income-text)"' : ''}>${r.type === 'income' ? '+ ' : ''}${money(r.amount)}</span>
       ${isEnded ? '' : `<button data-end-rule="${r.id}">Encerrar</button>`}
     </li>`;
   $('#recurringList').innerHTML = active.length || ended.length
     ? active.map((r) => row(r, false)).join('') +
-      (active.length ? `<li><div class="info"><strong>Total fixo por mês</strong></div><span class="amt">${money(total)}</span></li>` : '') +
+      (total ? `<li><div class="info"><strong>Total de despesas fixas por mês</strong></div><span class="amt">${money(total)}</span></li>` : '') +
+      (totalIn ? `<li><div class="info"><strong>Total de entradas recorrentes</strong></div><span class="amt" style="color:var(--income-text)">+ ${money(totalIn)}</span></li>` : '') +
       ended.map((r) => row(r, true)).join('')
-    : `<li class="empty-msg">Nenhuma ainda. Ao lançar um gasto como <b>Fixa</b>, ele aparece aqui e se repete todo mês.</li>`;
+    : `<li class="empty-msg">Nenhum ainda. Ao lançar um gasto como <b>Fixa</b> ou uma entrada com <b>Repetir todo mês</b>, ele aparece aqui.</li>`;
 }
 
 // ---------- Contas fixas: vencimento, pagamento e lembretes ----------
@@ -958,6 +972,79 @@ function renderBills() {
       <button class="pay ${t.paid ? 'done' : ''}" data-pay="${t.id}">${t.paid ? '✓ Paga' : 'Pagar'}</button>
     </li>`;
   }).join('');
+}
+
+// ---------- Projeção do fim do mês ----------
+function renderProjection() {
+  const list = txOfMonth();
+  const real = expand(list);
+  const received = sumBy(real, (t) => t.type === 'income');
+  const expected = list.filter((t) => t.type === 'income' && t.expected).sort((a, b) => a.date.localeCompare(b.date));
+  const toReceive = expected.reduce((a, t) => a + t.amount, 0);
+  const expenses = real.filter((t) => t.type === 'expense');
+  const unpaidBills = list.filter((t) => isBill(t) && !t.paid).reduce((a, t) => a + t.amount, 0);
+  const spentPaid = sumBy(expenses, () => true) - unpaidBills;
+  const today = todayISO();
+  const isCurrent = currentMonth === monthKey(today);
+  const isFuture = currentMonth > monthKey(today);
+
+  // Estimativa do dia a dia: média diária dos gastos variáveis já feitos × dias que faltam
+  const nDays = daysInMonth(currentMonth);
+  let estimate = 0;
+  let estimateNote = '';
+  if (isCurrent) {
+    const day = Number(today.slice(8, 10));
+    const variableToDate = sumBy(expenses, (t) => t.nature !== 'fixed' && t.date <= today && t.category !== CARD);
+    estimate = Math.round((variableToDate / day) * (nDays - day));
+    estimateNote = `média de ${money(Math.round(variableToDate / day))}/dia × ${nDays - day} dias`;
+  } else if (isFuture) {
+    const prev = expand(txOfMonth(shiftMonth(monthKey(today), -1))).filter((t) => t.type === 'expense' && t.nature !== 'fixed');
+    estimate = sumBy(prev, () => true);
+    estimateNote = 'igual aos gastos variáveis do mês passado';
+  }
+  const useEstimate = !!state.settings.projEstimate && !!estimate;
+  $('#projEstimate').checked = !!state.settings.projEstimate;
+  $('#projEstimate').parentElement.hidden = !estimate;
+
+  const now = received - spentPaid;
+  const end = received + toReceive - spentPaid - unpaidBills - (useEstimate ? estimate : 0);
+  $('#projNow').textContent = money(now);
+  $('#projNow').className = now < 0 ? 'neg' : '';
+  $('#projEnd').textContent = money(end);
+  $('#projEnd').className = end < 0 ? 'neg' : 'pos';
+  $('#projEndLabel').textContent = isCurrent || isFuture ? 'Previsto no fim do mês' : 'Fechou o mês com';
+
+  const line = (label, value, sign, note) => `<li><span>${label}${note ? `<small>${note}</small>` : ''}</span><b>${sign}${money(value)}</b></li>`;
+  let html = line('Recebido', received, '+ ');
+  if (toReceive) html += line('A receber', toReceive, '+ ', `${expected.length} entrada(s) prevista(s)`);
+  html += line('Gastos já feitos', spentPaid, '− ');
+  if (unpaidBills) html += line('Contas fixas a pagar', unpaidBills, '− ');
+  if (useEstimate) html += line('Gastos do dia a dia (estimativa)', estimate, '− ', estimateNote);
+  html += `<li class="total"><span>Saldo ${isCurrent || isFuture ? 'previsto' : 'final'}</span><b>${money(end)}</b></li>`;
+  $('#projLines').innerHTML = html;
+
+  $('#expectedTitle').hidden = !expected.length;
+  $('#expectedList').innerHTML = expected.map((t) => {
+    const [, m, d] = t.date.split('-');
+    const n = daysUntil(t.date);
+    const when = n > 1 ? `previsto em ${n} dias` : n === 1 ? 'previsto para amanhã' : n === 0 ? 'previsto para hoje' : `previsto há ${-n} dia(s)`;
+    return `<li class="expected">
+      <div class="day"><b>${d}</b><small>${monthName(`2000-${m}`, true)}</small></div>
+      <div class="info"><strong>${escapeHtml(t.description || t.category)}</strong><small class="st-soon">${when}</small></div>
+      <span class="amt in">+ ${money(t.amount)}</span>
+      <button class="recv" data-recv="${t.id}">Recebi</button>
+    </li>`;
+  }).join('');
+}
+
+function markReceived(id) {
+  const t = state.transactions.find((x) => x.id === id);
+  if (!t) return;
+  t.expected = false;
+  t.receivedDate = todayISO();
+  save();
+  renderAll();
+  toast(`+ ${money(t.amount)} de ${t.description || t.category} recebido`);
 }
 
 function renderDueAlert() {
@@ -1031,7 +1118,7 @@ function renderNotifStatus() {
 
 // Arquivo .ics: um evento mensal por conta fixa, com alarme às 9h do vencimento
 function exportIcs() {
-  const rules = state.recurring.filter((r) => !r.endMonth);
+  const rules = state.recurring.filter((r) => !r.endMonth && r.type !== 'income');
   if (!rules.length) { toast('Nenhuma despesa fixa ativa'); return; }
   const pad = (n) => String(n).padStart(2, '0');
   const esc = (s) => String(s).replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, ' ');
@@ -1064,6 +1151,7 @@ let recurTarget = null;
 function askDeleteRecurring(tx) {
   recurTarget = tx;
   const m = monthKey(tx.date);
+  $('#recurTitle').textContent = tx.type === 'income' ? 'Excluir entrada mensal' : 'Excluir despesa fixa';
   $('#recurText').innerHTML = `<b>${escapeHtml(tx.description || tx.category)}</b> (${money(tx.amount)}) se repete todo mês. ` +
     `Se ela deixou de existir, será removida de ${monthName(m)} em diante; os meses anteriores continuam registrados.`;
   $('#recurDialog').showModal();
@@ -1099,7 +1187,10 @@ function renderList() {
     let tag = t.type === 'expense'
       ? `<span class="tag ${t.nature}">${t.nature === 'fixed' ? 'fixa' : 'variável'}</span>` : '';
     if (t.fee) tag += `<span class="tag fee">taxa ${money(t.fee)}</span>`;
-    if (t.recurringId) {
+    if (t.type === 'income') {
+      if (t.recurringId) tag += '<span class="tag recur">🔁 mensal</span>';
+      if (t.expected) tag += `<span class="tag expected">a receber ${t.date.slice(8, 10)}/${t.date.slice(5, 7)}</span>`;
+    } else if (t.recurringId) {
       tag = tag.replace('>fixa<', '>🔁 fixa mensal<');
       const st = billStatus(t);
       const cls = st.key === 'paid' ? 'paid' : st.key === 'late' ? 'late' : 'due';
@@ -1116,7 +1207,7 @@ function renderList() {
         <strong>${escapeHtml(t.description || t.category)}</strong>
         <small>${escapeHtml(t.category)}${tag}</small>
       </div>
-      <div class="val ${t.type}">${t.type === 'expense' ? '−' : '+'} ${money(t.amount)}</div>
+      <div class="val ${t.type} ${t.expected ? 'expected' : ''}">${t.type === 'expense' ? '−' : '+'} ${money(t.amount)}</div>
       <div class="tx-actions"><button data-del="${t.id}" aria-label="Excluir">🗑</button></div>
     </li>`;
   }
@@ -1165,12 +1256,14 @@ function updateFeeRow() {
 
 function updateRepeatRow() {
   const f = $('#txForm');
-  const show = f.type.value === 'expense' && f.nature.value === 'fixed' && $('#category').value !== CARD;
+  const isIncome = f.type.value === 'income';
+  const show = isIncome || (f.nature.value === 'fixed' && $('#category').value !== CARD);
   $('#repeatRow').hidden = !show;
+  $('#statusRow').hidden = !isIncome;
   const editingRecurring = editingId && state.transactions.find((t) => t.id === editingId)?.recurringId;
   $('#repeatHint').textContent = editingRecurring
     ? '— alterações valem para este mês e os próximos'
-    : '— entra automaticamente nos próximos meses';
+    : isIncome ? '— ex.: salário, adiantamento (entra como “a receber” todo mês)' : '— entra automaticamente nos próximos meses';
 }
 
 function openForm(tx) {
@@ -1187,7 +1280,10 @@ function openForm(tx) {
     form.description.value = tx.description || '';
     form.nature.value = tx.nature || 'variable';
     if (tx.fee) form.fee.value = (tx.fee / 100).toFixed(2).replace('.', ',');
-    form.repeat.checked = !!tx.recurringId || !(tx.nature === 'fixed');
+    form.repeat.checked = tx.type === 'income' ? !!tx.recurringId : (!!tx.recurringId || !(tx.nature === 'fixed'));
+    form.status.value = tx.expected ? 'expected' : 'received';
+  } else {
+    form.repeat.checked = type === 'expense';
   }
   updateFeeRow();
   updateRepeatRow();
@@ -1224,7 +1320,9 @@ function submitForm(e) {
     fee,
   };
 
-  const wantsRepeat = type === 'expense' && data.nature === 'fixed' && data.category !== CARD && form.repeat.checked;
+  if (type === 'income') data.expected = form.status.value === 'expected';
+  const wantsRepeat = form.repeat.checked &&
+    (type === 'income' || (data.nature === 'fixed' && data.category !== CARD));
   let openCardAfter = null;
   if (editingId) {
     const tx = state.transactions.find((t) => t.id === editingId);
@@ -1267,7 +1365,7 @@ function submitForm(e) {
 
 function newRule(data) {
   const rule = {
-    id: uid(), description: data.description, category: data.category, amount: data.amount,
+    id: uid(), type: data.type, description: data.description, category: data.category, amount: data.amount,
     day: Number(data.date.slice(8, 10)), startMonth: monthKey(data.date), endMonth: null, skipped: [],
   };
   state.recurring.push(rule);
@@ -1327,6 +1425,7 @@ function renderAll() {
   ensureRecurring(recurringHorizon());
   $('#monthLabel').textContent = monthName(currentMonth);
   renderResumo();
+  renderProjection();
   renderBills();
   renderDueAlert();
   renderInsights();
@@ -1356,7 +1455,11 @@ $('#cancelTx').onclick = () => $('#txDialog').close();
 $('#txForm').addEventListener('submit', submitForm);
 $('#category').addEventListener('change', () => { updateFeeRow(); updateRepeatRow(); });
 document.querySelectorAll('#txForm input[name="type"]').forEach((r) => {
-  r.onchange = () => fillCategorySelect(r.value);
+  r.onchange = () => {
+    fillCategorySelect(r.value);
+    if (!editingId) $('#txForm').repeat.checked = r.value === 'expense';
+    updateRepeatRow();
+  };
 });
 
 $('#txList').addEventListener('click', (e) => {
@@ -1575,6 +1678,29 @@ async function protectStorage() {
   } catch { /* navegador sem suporte */ }
 }
 protectStorage();
+
+$('#expectedList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-recv]');
+  if (b) markReceived(b.dataset.recv);
+});
+$('#projEstimate').onchange = (e) => { state.settings.projEstimate = e.target.checked; save(); renderAll(); };
+$('#addExpected').onclick = () => {
+  openForm();
+  const f = $('#txForm');
+  f.type.value = 'income';
+  fillCategorySelect('income');
+  f.repeat.checked = false;
+  f.status.value = 'expected';
+  const t = todayISO();
+  f.date.value = currentMonth === monthKey(t) ? t : `${currentMonth}-05`;
+  $('#txTitle').textContent = 'Entrada a receber';
+  updateRepeatRow();
+};
+// Data futura numa entrada nova: já sugere "a receber"
+$('#txForm').date.addEventListener('change', (e) => {
+  const f = $('#txForm');
+  if (!editingId && f.type.value === 'income') f.status.value = e.target.value > todayISO() ? 'expected' : 'received';
+});
 
 $('#billsList').addEventListener('click', (e) => {
   const b = e.target.closest('[data-pay]');

@@ -34,9 +34,25 @@
         <button id="bannerBackup">Salvar backup</button>
       </div>
       <div class="cards">
-        <div class="card income"><span>Entradas</span><strong id="totIncome">R$ 0,00</strong></div>
+        <div class="card income"><span>Entradas</span><strong id="totIncome">R$ 0,00</strong><small id="totExpected" class="card-sub"></small></div>
         <div class="card expense"><span>Saídas</span><strong id="totExpense">R$ 0,00</strong></div>
         <div class="card balance"><span>Saldo</span><strong id="totBalance">R$ 0,00</strong></div>
+      </div>
+
+      <div class="panel" id="projPanel">
+        <div class="bills-head">
+          <h2>🔮 Projeção do mês</h2>
+          <button id="addExpected" class="secondary small-btn">+ A receber</button>
+        </div>
+        <div class="proj-hero">
+          <div><span>Saldo hoje</span><strong id="projNow"></strong></div>
+          <div class="arrow">→</div>
+          <div class="right"><span id="projEndLabel">Fim do mês</span><strong id="projEnd"></strong></div>
+        </div>
+        <ul id="projLines" class="proj-lines"></ul>
+        <label class="check-row compact"><input type="checkbox" id="projEstimate"><span>Incluir estimativa dos gastos do dia a dia até o fim do mês</span></label>
+        <h3 id="expectedTitle">A receber</h3>
+        <ul id="expectedList" class="bills"></ul>
       </div>
 
       <div class="panel" id="billsPanel">
@@ -160,8 +176,8 @@
         <label class="check-row"><input type="checkbox" id="remindBefore"><span>Avisar também 1 dia antes do vencimento</span></label>
       </div>
       <div class="panel">
-        <h2>🔁 Despesas fixas mensais</h2>
-        <p class="muted small-note">Entram sozinhas todo mês. Quando uma deixar de existir, toque em <b>Encerrar</b>: ela some dos meses seguintes e continua nos anteriores.</p>
+        <h2>🔁 Lançamentos mensais</h2>
+        <p class="muted small-note">Despesas fixas e entradas recorrentes (salário, adiantamento) entram sozinhas todo mês. Quando uma deixar de existir, toque em <b>Encerrar</b>: ela some dos meses seguintes e continua nos anteriores.</p>
         <ul id="recurringList" class="recurring-list"></ul>
       </div>
       <div class="panel">
@@ -226,6 +242,10 @@
       <label id="feeRow" hidden>Taxa de entrega (R$) — já incluída no valor total
         <input name="fee" id="fee" inputmode="decimal" placeholder="0,00 (opcional)" autocomplete="off">
       </label>
+      <div id="statusRow" class="toggle" hidden>
+        <input type="radio" name="status" id="sReceived" value="received" checked><label for="sReceived">Já recebido</label>
+        <input type="radio" name="status" id="sExpected" value="expected"><label for="sExpected">A receber (previsto)</label>
+      </div>
       <div id="natureRow" class="toggle">
         <input type="radio" name="nature" id="nVariable" value="variable" checked><label for="nVariable">Variável</label>
         <input type="radio" name="nature" id="nFixed" value="fixed"><label for="nFixed">Fixa</label>
@@ -299,7 +319,7 @@
 
   <dialog id="recurDialog">
     <div class="dialog-body">
-      <h2>Excluir despesa fixa</h2>
+      <h2 id="recurTitle">Excluir despesa fixa</h2>
       <p id="recurText" class="muted"></p>
       <div class="stack">
         <button id="recurOnlyThis" class="secondary">Só deste mês</button>

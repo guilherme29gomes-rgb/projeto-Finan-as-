@@ -380,3 +380,33 @@ label.check-row { display: flex; }
 .reminder-opt > div { flex: 1 1 220px; }
 .reminder-opt button { flex: 0 0 auto; margin-left: auto; }
 .recurring-list li.empty-msg { display: block; }
+
+/* ---------- Projeção e entradas previstas ---------- */
+.card-sub { display: block; font-size: .7rem; color: var(--text-2); margin-top: 2px; white-space: nowrap; }
+.card-sub:empty { display: none; }
+.proj-hero { display: flex; align-items: center; gap: 8px; background: var(--bg); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.proj-hero > div:not(.arrow) { flex: 1; }
+.proj-hero span { display: block; font-size: .78rem; color: var(--text-2); }
+.proj-hero strong { font-size: 1.25rem; letter-spacing: -.01em; }
+.proj-hero .right { text-align: right; }
+.proj-hero .arrow { color: var(--muted); font-size: 1.2rem; }
+.proj-hero strong.neg { color: var(--expense-text); }
+.proj-hero strong.pos { color: var(--income-text); }
+.proj-lines { list-style: none; margin: 0 0 8px; padding: 0; font-size: .88rem; }
+.proj-lines li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; color: var(--text-2); }
+.proj-lines li b { color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.proj-lines li.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; color: var(--text); font-weight: 600; }
+.proj-lines li small { display: block; font-size: .74rem; color: var(--muted); }
+.check-row.compact { font-size: .82rem !important; padding: 8px 10px; margin-bottom: 4px; }
+#projPanel h3:empty, #projPanel h3[hidden] { display: none; }
+.bills .recv { padding: 7px 10px; font-size: .8rem; white-space: nowrap; background: #e7f6ef; color: var(--income-text); }
+.bills li.expected .day { background: #e7f6ef; color: var(--income-text); }
+.bills .amt.in { color: var(--income-text); }
+.tag.expected { background: #e7f6ef; color: var(--income-text); }
+.tx .val.expected { opacity: .6; }
+.cards .card { min-width: 0; }
+.card-sub { white-space: normal; line-height: 1.2; }
+.bills-head { align-items: center; }
+.bills-head h2 { font-size: 1rem; margin-bottom: 0; }
+#projPanel .bills-head { margin-bottom: 10px; }
+#addExpected { white-space: nowrap; flex-shrink: 0; }
