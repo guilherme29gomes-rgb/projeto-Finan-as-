@@ -15,8 +15,16 @@ const SNAPSHOT_KEY = `${STORAGE_KEY}.copia-automatica`;
 
 const DEFAULT_CATEGORIES = {
   expense: ['Moradia', 'Alimentação', DELIVERY, 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer',
-    'Assinaturas', 'Contas (luz, água, internet)', 'Compras', 'Cartão de crédito', 'Outros'],
+    'Assinaturas', 'Contas (luz, água, internet)', 'Compras online', 'Compras', 'Cartão de crédito', 'Outros'],
   income: ['Salário', 'Adiantamento salarial', 'Férias', '13º salário', 'Bônus/PLR', 'Freelance', 'Investimentos', 'Vendas', 'Outros'],
+};
+
+// Cores fixas das categorias padrão: as mais usadas no cartão (Delivery, Compras online,
+// Mercado, Transporte) ficam em tons bem diferentes entre si.
+const DEFAULT_COLORS = {
+  Moradia: '#2a78d6', 'Alimentação': '#eb6834', [DELIVERY]: '#e87ba4', Mercado: '#1baf7a', Transporte: '#eda100',
+  'Saúde': '#008300', 'Educação': '#8a5d00', Lazer: '#e34948', Assinaturas: '#184f95',
+  'Contas (luz, água, internet)': '#a8461f', 'Compras online': '#4a3aa7', Compras: '#0f7a54', [CARD]: '#6b6a65', Outros: '#b9b8b2',
 };
 
 function defaultState() {
@@ -27,7 +35,7 @@ function defaultState() {
     settings: {},
     rules: {},
     categories: {
-      expense: DEFAULT_CATEGORIES.expense.map((name, i) => ({ name, color: PALETTE[i % PALETTE.length] })),
+      expense: DEFAULT_CATEGORIES.expense.map((name, i) => ({ name, color: DEFAULT_COLORS[name] || PALETTE[i % PALETTE.length] })),
       income: DEFAULT_CATEGORIES.income.map((name, i) => ({ name, color: PALETTE[(i + 2) % PALETTE.length] })),
     },
   };
@@ -79,6 +87,12 @@ function migrate(s) {
   if (!s.categories.expense.some((c) => c.name === CARD)) {
     const used = new Set(s.categories.expense.map((c) => c.color));
     s.categories.expense.push({ name: CARD, color: PALETTE.find((p) => !used.has(p)) || '#6b6a65' });
+  }
+  if (!s.categories.expense.some((c) => c.name === 'Compras online')) {
+    const used = new Set(s.categories.expense.map((c) => c.color));
+    const idx = s.categories.expense.findIndex((c) => c.name === 'Compras');
+    s.categories.expense.splice(idx > -1 ? idx : s.categories.expense.length, 0,
+      { name: 'Compras online', color: used.has('#4a3aa7') ? (PALETTE.find((p) => !used.has(p)) || '#9c3b63') : '#4a3aa7' });
   }
   if (!s.categories.expense.some((c) => c.name === DELIVERY)) {
     const used = new Set(s.categories.expense.map((c) => c.color));
@@ -483,6 +497,7 @@ function kpi(label, value, sub = '') {
 }
 
 function renderInsights() {
+  renderCardsHistory();
   const list = expand(txOfMonth());
   const expenses = list.filter((t) => t.type === 'expense');
   const income = sumBy(list, (t) => t.type === 'income');
@@ -639,6 +654,7 @@ const CARD_RULES = [
   [DELIVERY, ['ifood', 'ifd*', 'rappi', 'uber eats', 'ubereats', 'aiqfome', 'ze delivery', 'zedelivery', 'james delivery', '99food', 'delivery']],
   ['Assinaturas', ['netflix', 'spotify', 'amazon prime', 'primevideo', 'prime video', 'disney', 'hbo', 'max.com', 'globoplay', 'youtube', 'google one', 'google storage', 'apple.com', 'apple com', 'icloud', 'deezer', 'paramount', 'crunchyroll', 'chatgpt', 'openai', 'claude.ai', 'anthropic', 'microsoft', 'xbox', 'playstation', 'psn', 'smart fit', 'smartfit', 'gympass', 'wellhub', 'totalpass', 'mubi', 'tidal', 'kindle unltd', 'audible'], true],
   ['Transporte', ['uber', '99app', '99 app', '99pop', '99 pop', '99 taxi', 'cabify', 'indriver', 'posto', 'shell', 'ipiranga', 'petrobras', 'br mania', 'combust', 'estacion', 'sem parar', 'semparar', 'conectcar', 'veloe', 'pedagio', 'metro', 'bilhete unico', 'cptm', 'buser', 'clickbus', 'zul digital']],
+  ['Compras online', ['mercadolivre', 'mercado livre', 'meli', 'mercado pago', 'amazon', 'amzn', 'shopee', 'shein', 'aliexpress', 'temu', 'magalu', 'magazine luiza', 'americanas.com', 'netshoes', 'kabum', 'dafiti', 'zattini', 'submarino', 'olist', 'pagseguro', 'paypal', 'hotmart', 'online', '.com']],
   ['Compras', ['mercadolivre', 'mercado livre', 'meli', 'amazon', 'amzn', 'shopee', 'shein', 'aliexpress', 'magalu', 'magazine luiza', 'americanas', 'casas bahia', 'renner', 'riachuelo', 'c&a', 'cea ', 'zara', 'centauro', 'netshoes', 'kabum', 'leroy', 'decathlon', 'nike', 'adidas', 'havan', 'tok&stok', 'tokstok', 'ikea', 'temu']],
   ['Mercado', ['supermerc', 'mercado', 'carrefour', 'assai', 'atacad', 'pao de acucar', 'paodeacucar', 'extra hiper', 'hortifruti', 'sacolao', 'sams club', 'makro', 'oba horti', 'st marche', 'zaffari', 'guanabara', 'prezunic', 'mambo', 'dia brasil', 'emporio', 'acougue', 'hiper']],
   ['Alimentação', ['restaurante', 'rest ', 'lanchonete', 'lanches', 'padaria', 'panific', 'burger', 'mcdonald', 'mc donald', 'bk brasil', 'burger king', 'subway', 'starbucks', 'cafe', 'cafeteria', 'pizzaria', 'pizza', 'sushi', 'outback', 'coco bambu', 'habib', 'spoleto', 'giraffas', 'madero', 'churrasc', 'bar ', 'boteco', 'sorvet', 'acai', 'doceria', 'food']],
@@ -696,6 +712,104 @@ function cardTx() { return state.transactions.find((t) => t.id === openCardId); 
 function ensureCard(tx) {
   if (!tx.card) tx.card = { items: [] };
   return tx.card;
+}
+
+// Nome do cartão = descrição da fatura (ex.: "Nubank"). Agrupa ignorando maiúsculas/acentos.
+function cardName(tx) { return (tx.description || 'Cartão').trim(); }
+
+function cardsSummary(months) {
+  const map = new Map();
+  for (const m of months) {
+    for (const t of txOfMonth(m)) {
+      if (!(t.type === 'expense' && t.card)) continue;
+      const key = normalizeText(cardName(t));
+      if (!map.has(key)) map.set(key, { name: cardName(t), total: 0, byCat: {}, faturas: [], topByMonth: {} });
+      const c = map.get(key);
+      const { items, remainder } = cardStats(t);
+      c.total += t.amount;
+      c.faturas.push(t.id);
+      const monthCats = {};
+      items.forEach((it) => {
+        const cat = it.category === CARD ? 'Sem categoria' : it.category;
+        c.byCat[cat] = (c.byCat[cat] || 0) + it.amount;
+        monthCats[cat] = (monthCats[cat] || 0) + it.amount;
+      });
+      if (remainder > 0) c.byCat['Falta lançar'] = (c.byCat['Falta lançar'] || 0) + remainder;
+      const top = Object.entries(monthCats).sort((a, b) => b[1] - a[1])[0];
+      if (top) c.topByMonth[m] = top[0];
+    }
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}
+
+function segColor(name) {
+  if (name === 'Falta lançar') return OTHER_COLOR;
+  if (name === 'Sem categoria') return '#f3c44b';
+  return catColor('expense', name);
+}
+
+// Bloco de um cartão: barra empilhada por categoria + as principais categorias
+function cardBlock(c, i, segs, extraFoot = '') {
+  const base = Object.values(c.byCat).reduce((a, v) => a + Math.max(0, v), 0) || 1;
+  const entries = Object.entries(c.byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const real = entries.filter(([n]) => n !== 'Falta lançar' && n !== 'Sem categoria');
+  let insight;
+  if (real.length) {
+    const [n1, v1] = real[0];
+    insight = `Você mais gasta com <b>${escapeHtml(n1)}</b> neste cartão: <b>${pct((v1 / base) * 100)}</b>`;
+    if (real[1]) insight += `, depois <b>${escapeHtml(real[1][0])}</b> (${pct((real[1][1] / base) * 100)})`;
+    insight += '.';
+  } else {
+    insight = 'Adicione os gastos da fatura para ver as categorias deste cartão.';
+  }
+  const bar = entries.map(([name, v]) => {
+    segs.push({ card: c.name, name, v, p: (v / base) * 100 });
+    return `<div data-tip-idx="${segs.length - 1}" style="width:${(v / base) * 100}%;background:${segColor(name)}"></div>`;
+  }).join('');
+  const legend = entries.slice(0, 4).map(([name, v]) => `<li><i class="dot" style="background:${segColor(name)}"></i>
+    <span class="name">${escapeHtml(name)}</span><b>${money(v)}</b><em>${pct((v / base) * 100)}</em></li>`).join('');
+  const more = entries.length > 4 ? `<li class="muted" style="font-size:.78rem">+ ${entries.length - 4} outra(s) categoria(s)</li>` : '';
+  return `<div class="cc" data-open-card="${c.faturas[c.faturas.length - 1]}">
+    <div class="cc-head"><strong>💳 ${escapeHtml(c.name)}</strong><b>${money(c.total)}</b></div>
+    <p class="cc-insight">${insight}</p>
+    <div class="stack-bar">${bar}</div>
+    <ul class="cc-legend">${legend}${more}</ul>
+    ${extraFoot}
+  </div>`;
+}
+
+function bindCardTips(root, segs) {
+  bindTips(root, (i) => `<div class="t-title">${escapeHtml(segs[i].card)}</div>` +
+    tipRow(segColor(segs[i].name), segs[i].name, money(segs[i].v)) + tipRow(null, 'Participação', pct(segs[i].p)));
+}
+
+function renderCardsMonth() {
+  const cards = cardsSummary([currentMonth]);
+  $('#cardsPanel').hidden = !cards.length;
+  if (!cards.length) return;
+  const segs = [];
+  $('#cardsList').innerHTML = cards.map((c, i) => cardBlock(c, i, segs)).join('');
+  bindCardTips($('#cardsList'), segs);
+}
+
+function renderCardsHistory() {
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(shiftMonth(currentMonth, -i));
+  const cards = cardsSummary(months);
+  $('#cardsHistoryPanel').hidden = !cards.length;
+  if (!cards.length) return;
+  const segs = [];
+  $('#cardsHistory').innerHTML = cards.map((c, i) => {
+    const tops = Object.values(c.topByMonth);
+    const counts = {};
+    tops.forEach((n) => { counts[n] = (counts[n] || 0) + 1; });
+    const lead = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    const foot = lead && tops.length > 1
+      ? `<p class="cc-foot">${escapeHtml(lead[0])} foi a maior categoria em <b>${lead[1]} de ${tops.length}</b> fatura(s) · média de ${money(Math.round(c.total / c.faturas.length))} por fatura</p>`
+      : `<p class="cc-foot">${c.faturas.length} fatura(s) no período</p>`;
+    return cardBlock(c, i, segs, foot);
+  }).join('');
+  bindCardTips($('#cardsHistory'), segs);
 }
 
 function cardStats(tx) {
@@ -1251,7 +1365,14 @@ function updateFeeRow() {
   $('#feeRow').hidden = !(isExpense && $('#category').value === DELIVERY);
   const isCard = isExpense && $('#category').value === CARD;
   $('#cardHint').hidden = !isCard;
-  $('#txForm').description.placeholder = isCard ? 'Ex.: Nubank, Itaú Visa' : 'Ex.: Mercado, Uber, iFood';
+  $('#txForm').description.placeholder = isCard ? 'Nome do cartão (ex.: Nubank, Itaú Visa)' : 'Ex.: Mercado, Uber, iFood';
+  if (isCard) {
+    const names = [...new Set(state.transactions.filter((t) => t.card).map(cardName))];
+    $('#cardNames').innerHTML = names.map((n) => `<option value="${escapeHtml(n)}">`).join('');
+    $('#txForm').description.setAttribute('list', 'cardNames');
+  } else {
+    $('#txForm').description.removeAttribute('list');
+  }
 }
 
 function updateRepeatRow() {
@@ -1425,6 +1546,7 @@ function renderAll() {
   ensureRecurring(recurringHorizon());
   $('#monthLabel').textContent = monthName(currentMonth);
   renderResumo();
+  renderCardsMonth();
   renderProjection();
   renderBills();
   renderDueAlert();
@@ -1678,6 +1800,11 @@ async function protectStorage() {
   } catch { /* navegador sem suporte */ }
 }
 protectStorage();
+
+['#cardsList', '#cardsHistory'].forEach((sel) => $(sel).addEventListener('click', (e) => {
+  const c = e.target.closest('[data-open-card]');
+  if (c) openCard(c.dataset.openCard);
+}));
 
 $('#expectedList').addEventListener('click', (e) => {
   const b = e.target.closest('[data-recv]');

@@ -81,6 +81,12 @@
         <ul id="categoryBreakdown" class="breakdown"></ul>
       </div>
 
+      <div class="panel" id="cardsPanel" hidden>
+        <h2>💳 Seus cartões neste mês</h2>
+        <p class="muted small-note" style="margin:-4px 0 10px">Em que categoria você mais gasta em cada cartão. Toque no cartão para ver a fatura.</p>
+        <div id="cardsList" class="cards-list"></div>
+      </div>
+
       <div class="panel">
         <h2>Entradas por origem</h2>
         <ul id="incomeBreakdown" class="breakdown"></ul>
@@ -104,6 +110,12 @@
         <p class="muted small">Gasto acumulado ao longo do mês, comparado com o mês anterior.</p>
         <div id="paceChart" class="chart"></div>
         <ul class="legend inline" id="paceLegend"></ul>
+      </div>
+
+      <div class="panel" id="cardsHistoryPanel" hidden>
+        <h2>💳 Cartões nos últimos 6 meses</h2>
+        <p class="muted small-note" style="margin:-4px 0 10px">O hábito de cada cartão: para onde vai o dinheiro dele, somando os últimos 6 meses.</p>
+        <div id="cardsHistory" class="cards-list"></div>
       </div>
 
       <div class="panel" id="deliveryPanel">
@@ -234,6 +246,7 @@
       </label>
       <label>Descrição
         <input name="description" placeholder="Ex.: Mercado, Uber, iFood" autocomplete="off">
+        <datalist id="cardNames"></datalist>
       </label>
       <label>Categoria
         <select name="category" id="category" required></select>
