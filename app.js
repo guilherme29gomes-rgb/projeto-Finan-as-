@@ -1076,6 +1076,7 @@ function renderBills() {
   $('#billsSummary').innerHTML = paidSum === total
     ? `✅ Todas as contas do mês pagas (${money(total)}).`
     : `Pago <b>${money(paidSum)}</b> · falta pagar <b>${money(total - paidSum)}</b>`;
+  $('#billsSummary').innerHTML += '<br><span class="muted">Marcar como paga é só controle: o valor já está nas Saídas do mês.</span>';
   $('#billsList').innerHTML = bills.map((t) => {
     const st = billStatus(t);
     const [, m, d] = t.date.split('-');
@@ -1096,7 +1097,9 @@ function renderProjection() {
   const expected = list.filter((t) => t.type === 'income' && t.expected).sort((a, b) => a.date.localeCompare(b.date));
   const toReceive = expected.reduce((a, t) => a + t.amount, 0);
   const expenses = real.filter((t) => t.type === 'expense');
-  const unpaidBills = list.filter((t) => isBill(t) && !t.paid).reduce((a, t) => a + t.amount, 0);
+  const bills = list.filter(isBill);
+  const unpaidBills = bills.filter((t) => !t.paid).reduce((a, t) => a + t.amount, 0);
+  const billsTotal = bills.reduce((a, t) => a + t.amount, 0);
   const spentPaid = sumBy(expenses, () => true) - unpaidBills;
   const today = todayISO();
   const isCurrent = currentMonth === monthKey(today);
@@ -1131,8 +1134,13 @@ function renderProjection() {
   const line = (label, value, sign, note) => `<li><span>${label}${note ? `<small>${note}</small>` : ''}</span><b>${sign}${money(value)}</b></li>`;
   let html = line('Recebido', received, '+ ');
   if (toReceive) html += line('A receber', toReceive, '+ ', `${expected.length} entrada(s) prevista(s)`);
-  html += line('Gastos já feitos', spentPaid, '− ');
-  if (unpaidBills) html += line('Contas fixas a pagar', unpaidBills, '− ');
+  // As contas fixas ficam numa linha só: pagar uma conta não muda os totais,
+  // só move o valor de "a pagar" para "pagas" (e reduz o saldo de hoje).
+  html += line('Outros gastos do mês', spentPaid - (billsTotal - unpaidBills), '− ');
+  if (billsTotal) {
+    html += line('Contas fixas do mês', billsTotal, '− ',
+      unpaidBills ? `${money(billsTotal - unpaidBills)} pagas · ${money(unpaidBills)} a pagar` : 'todas pagas');
+  }
   if (useEstimate) html += line('Gastos do dia a dia (estimativa)', estimate, '− ', estimateNote);
   html += `<li class="total"><span>Saldo ${isCurrent || isFuture ? 'previsto' : 'final'}</span><b>${money(end)}</b></li>`;
   $('#projLines').innerHTML = html;
