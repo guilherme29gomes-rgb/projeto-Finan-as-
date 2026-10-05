@@ -190,12 +190,19 @@ function catColor(type, name) {
 }
 
 let toastTimer;
-function toast(msg) {
+function toast(msg, action) {
   const el = $('#toast');
   el.textContent = msg;
+  el.classList.toggle('has-action', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.textContent = action.label;
+    b.onclick = () => { el.classList.remove('show'); action.fn(); };
+    el.appendChild(b);
+  }
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => el.classList.remove('show'), action ? 6000 : 2200);
 }
 
 // Carrega os dados (depois das utilidades, que a migração usa)
@@ -1131,19 +1138,60 @@ function renderProjection() {
   $('#projEnd').className = end < 0 ? 'neg' : 'pos';
   $('#projEndLabel').textContent = isCurrent || isFuture ? 'Previsto no fim do mês' : 'Fechou o mês com';
 
-  const line = (label, value, sign, note) => `<li><span>${label}${note ? `<small>${note}</small>` : ''}</span><b>${sign}${money(value)}</b></li>`;
-  let html = line('Recebido', received, '+ ');
-  if (toReceive) html += line('A receber', toReceive, '+ ', `${expected.length} entrada(s) prevista(s)`);
+  // Cada linha abre o que compõe aquele valor
+  const row = (label, sub, value, extra = '') => `<li><span>${escapeHtml(label)}${sub ? `<small>${sub}</small>` : ''}</span>${extra}<b>${value}</b></li>`;
+  const line = (label, value, sign, note, details) => details
+    ? `<li class="expand"><details><summary><span>${label}${note ? `<small>${note}</small>` : ''}</span><b>${sign}${money(value)}</b></summary><ul class="proj-detail">${details}</ul></details></li>`
+    : `<li><span>${label}${note ? `<small>${note}</small>` : ''}</span><b>${sign}${money(value)}</b></li>`;
+  const dm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const byCategory = (items) => {
+    const g = {};
+    items.forEach((t) => {
+      const k = t.category === CARD ? 'Cartão (falta lançar)' : t.category;
+      (g[k] = g[k] || { total: 0, n: 0, items: [] });
+      g[k].total += t.amount; g[k].n++; g[k].items.push(t);
+    });
+    return Object.entries(g).sort((a, b) => b[1].total - a[1].total);
+  };
+
+  const receivedList = list.filter((t) => t.type === 'income' && !t.expected).sort((a, b) => a.date.localeCompare(b.date));
+  const recvDetails = receivedList.map((t) => row(t.description || t.category, `${t.category} · ${dm(t.receivedDate || t.date)}`, `+ ${money(t.amount)}`,
+    `<button class="undo-recv" data-unrecv="${t.id}" title="Voltar para a receber">↩ Não recebi</button>`)).join('')
+    || '<li class="muted">Nenhuma entrada recebida ainda.</li>';
+  const expDetails = expected.map((t) => row(t.description || t.category, `${t.category} · previsto ${dm(t.date)}`, `+ ${money(t.amount)}`)).join('');
+
+  const others = expenses.filter((t) => !(t.recurringId && t.type === 'expense' && !t.cardId));
+  const othersTotal = spentPaid - (billsTotal - unpaidBills);
+  const otherDetails = byCategory(others).map(([cat, g]) => {
+    const top = g.items.slice().sort((a, b) => b.amount - a.amount).slice(0, 3)
+      .map((t) => `${escapeHtml(t.description || t.category)} ${money(t.amount)}`).join(' · ');
+    return `<li><span>${escapeHtml(cat)} <em>${g.n}×</em><small>${top}${g.n > 3 ? ' …' : ''}</small></span><b>− ${money(g.total)}</b></li>`;
+  }).join('') || '<li class="muted">Nenhum outro gasto lançado.</li>';
+  const billDetails = bills.slice().sort((a, b) => a.date.localeCompare(b.date)).map((t) =>
+    row(t.description || t.category, `vence ${dm(t.date)} · ${t.paid ? '✓ paga' : 'a pagar'}`, `− ${money(t.amount)}`)).join('');
+
+  let html = line('Recebido', received, '+ ', receivedList.length ? `${receivedList.length} entrada(s) · toque para ver` : '', recvDetails);
+  if (toReceive) html += line('A receber', toReceive, '+ ', `${expected.length} entrada(s) prevista(s)`, expDetails);
   // As contas fixas ficam numa linha só: pagar uma conta não muda os totais,
   // só move o valor de "a pagar" para "pagas" (e reduz o saldo de hoje).
-  html += line('Outros gastos do mês', spentPaid - (billsTotal - unpaidBills), '− ');
+  html += line('Outros gastos do mês', othersTotal, '− ', others.length ? `${others.length} lançamento(s) · toque para ver por categoria` : '', otherDetails);
   if (billsTotal) {
     html += line('Contas fixas do mês', billsTotal, '− ',
-      unpaidBills ? `${money(billsTotal - unpaidBills)} pagas · ${money(unpaidBills)} a pagar` : 'todas pagas');
+      unpaidBills ? `${money(billsTotal - unpaidBills)} pagas · ${money(unpaidBills)} a pagar` : 'todas pagas', billDetails);
   }
-  if (useEstimate) html += line('Gastos do dia a dia (estimativa)', estimate, '− ', estimateNote);
+  if (useEstimate) {
+    html += line('Gastos do dia a dia (estimativa)', estimate, '− ', estimateNote,
+      `<li class="muted">${isCurrent
+        ? 'Previsão do que você ainda deve gastar até o fim do mês com gastos variáveis (mercado, delivery, transporte…), pela média diária até hoje. Fixas e cartão ficam de fora. Desmarque a opção abaixo para tirar da conta.'
+        : 'Para meses futuros, usa o total de gastos variáveis do mês passado.'}</li>`);
+  }
   html += `<li class="total"><span>Saldo ${isCurrent || isFuture ? 'previsto' : 'final'}</span><b>${money(end)}</b></li>`;
+  // mantém abertas as linhas que o usuário tinha aberto
+  const open = [...$('#projLines').querySelectorAll('details[open] summary span')].map((s) => s.firstChild.textContent);
   $('#projLines').innerHTML = html;
+  $('#projLines').querySelectorAll('details').forEach((d) => {
+    if (open.includes(d.querySelector('summary span').firstChild.textContent)) d.open = true;
+  });
 
   $('#expectedTitle').hidden = !expected.length;
   $('#expectedList').innerHTML = expected.map((t) => {
@@ -1159,6 +1207,16 @@ function renderProjection() {
   }).join('');
 }
 
+function markNotReceived(id) {
+  const t = state.transactions.find((x) => x.id === id);
+  if (!t) return;
+  t.expected = true;
+  delete t.receivedDate;
+  save();
+  renderAll();
+  toast(`${t.description || t.category} voltou para "a receber"`);
+}
+
 function markReceived(id) {
   const t = state.transactions.find((x) => x.id === id);
   if (!t) return;
@@ -1166,7 +1224,7 @@ function markReceived(id) {
   t.receivedDate = todayISO();
   save();
   renderAll();
-  toast(`+ ${money(t.amount)} de ${t.description || t.category} recebido`);
+  toast(`+ ${money(t.amount)} de ${t.description || t.category} recebido`, { label: 'Desfazer', fn: () => markNotReceived(id) });
 }
 
 function renderDueAlert() {
@@ -1813,6 +1871,14 @@ protectStorage();
   const c = e.target.closest('[data-open-card]');
   if (c) openCard(c.dataset.openCard);
 }));
+
+$('#projLines').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-unrecv]');
+  if (!b) return;
+  e.preventDefault();
+  const t = state.transactions.find((x) => x.id === b.dataset.unrecv);
+  if (t && confirm(`Voltar "${t.description || t.category}" (${money(t.amount)}) para "a receber"?`)) markNotReceived(t.id);
+});
 
 $('#expectedList').addEventListener('click', (e) => {
   const b = e.target.closest('[data-recv]');
