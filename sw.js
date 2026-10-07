@@ -1,5 +1,5 @@
 // Service worker: permite usar o app offline e avisa sobre contas a vencer.
-const CACHE = 'fingui-v11';
+const CACHE = 'fingui-v12';
 const DATA_CACHE = 'fingui-dados'; // contas para os avisos (nunca é apagado nas atualizações)
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 

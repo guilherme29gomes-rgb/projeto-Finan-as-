@@ -277,6 +277,25 @@
     </form>
   </dialog>
 
+  <!-- COMPRAS DE UMA CATEGORIA -->
+  <dialog id="catDialog" class="sheet">
+    <div class="sheet-head">
+      <button id="closeCat" class="icon-btn" aria-label="Voltar">‹</button>
+      <div class="sheet-title"><h2 id="catTitle"></h2><small id="catSub"></small></div>
+    </div>
+    <div class="sheet-body">
+      <div class="kpis" id="catKpis"></div>
+      <div class="panel" id="catPlacesWrap">
+        <h2>Onde você mais gastou</h2>
+        <ul id="catPlaces" class="breakdown"></ul>
+      </div>
+      <div class="panel">
+        <h2>Lançamentos</h2>
+        <ul id="catItems" class="bills cat-items"></ul>
+      </div>
+    </div>
+  </dialog>
+
   <!-- FATURA DO CARTÃO -->
   <dialog id="cardDialog" class="sheet">
     <div class="sheet-head">

@@ -235,8 +235,8 @@ function renderBreakdown(el, list, type) {
   el.innerHTML = entries.map(([name, value]) => {
     const pct = total ? (value / total) * 100 : 0;
     const color = catColor(type, name);
-    return `<li>
-      <div class="row"><span>${escapeHtml(name)}</span><b>${money(value)} · ${pct.toFixed(1).replace('.', ',')}%</b></div>
+    return `<li class="clickable" data-cat="${escapeHtml(name)}" data-cat-type="${type}">
+      <div class="row"><span>${escapeHtml(name)} <i class="chev">›</i></span><b>${money(value)} · ${pct.toFixed(1).replace('.', ',')}%</b></div>
       <div class="bar"><div style="width:${pct}%;background:${color}"></div></div>
     </li>`;
   }).join('');
@@ -491,12 +491,16 @@ function donutChart(el, legendEl, items, total) {
   el.innerHTML = `<svg viewBox="0 0 168 168" role="img" aria-label="Gastos por categoria">${paths}
     <text x="${C}" y="${C - 4}" text-anchor="middle" font-size="11" style="fill:var(--text-2)">Total</text>
     <text x="${C}" y="${C + 14}" text-anchor="middle" font-size="15" font-weight="700" style="fill:var(--text)">${compactMoney(total)}</text></svg>`;
-  legendEl.innerHTML = items.map((it, i) => `<li data-tip-idx="${i}"><i class="dot" style="background:${it.color}"></i>
+  legendEl.innerHTML = items.map((it, i) => `<li data-tip-idx="${i}" ${it.other ? '' : `class="clickable" data-cat="${escapeHtml(it.name)}"`}><i class="dot" style="background:${it.color}"></i>
     <span class="name">${escapeHtml(it.name)}</span><b>${money(it.value)}</b><em>${pct((it.value / total) * 100)}</em></li>`).join('');
   const html = (i) => `<div class="t-title">${escapeHtml(items[i].name)}</div>` +
     tipRow(items[i].color, 'Valor', money(items[i].value)) +
     tipRow(null, 'Participação', pct((items[i].value / total) * 100));
   bindTips(el, html);
+  el.onclick = (e) => {
+    const seg = e.target.closest('[data-tip-idx]');
+    if (seg && !items[seg.dataset.tipIdx].other) openCategory(items[seg.dataset.tipIdx].name);
+  };
 }
 
 function kpi(label, value, sub = '') {
@@ -542,7 +546,7 @@ function renderInsights() {
   let items = sorted;
   if (sorted.length > 7) {
     const rest = sorted.slice(6).reduce((a, it) => a + it.value, 0);
-    items = [...sorted.slice(0, 6), { name: `Outras (${sorted.length - 6})`, value: rest, color: OTHER_COLOR }];
+    items = [...sorted.slice(0, 6), { name: `Outras (${sorted.length - 6})`, value: rest, color: OTHER_COLOR, other: true }];
   }
   donutChart($('#donut'), $('#donutLegend'), items, spent);
 
@@ -609,7 +613,7 @@ function renderInsights() {
     const d = c.now - c.before;
     const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
     const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '=';
-    return `<li><span class="name"><i class="dot" style="background:${catColor('expense', c.name)}"></i>${escapeHtml(c.name)}</span>
+    return `<li class="clickable" data-cat="${escapeHtml(c.name)}"><span class="name"><i class="dot" style="background:${catColor('expense', c.name)}"></i>${escapeHtml(c.name)}</span>
       <span class="val">${compactMoney(c.now)}</span>
       <span class="delta ${cls}">${arrow} ${d ? money(Math.abs(d)) : ''}</span></li>`;
   }).join('') : `<li class="empty-msg">Sem gastos neste mês nem no anterior.</li>`;
@@ -756,7 +760,7 @@ function segColor(name) {
 }
 
 // Bloco de um cartão: barra empilhada por categoria + as principais categorias
-function cardBlock(c, i, segs, extraFoot = '') {
+function cardBlock(c, i, segs, extraFoot = '', months = 1) {
   const base = Object.values(c.byCat).reduce((a, v) => a + Math.max(0, v), 0) || 1;
   const entries = Object.entries(c.byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const real = entries.filter(([n]) => n !== 'Falta lançar' && n !== 'Sem categoria');
@@ -773,7 +777,7 @@ function cardBlock(c, i, segs, extraFoot = '') {
     segs.push({ card: c.name, name, v, p: (v / base) * 100 });
     return `<div data-tip-idx="${segs.length - 1}" style="width:${(v / base) * 100}%;background:${segColor(name)}"></div>`;
   }).join('');
-  const legend = entries.slice(0, 4).map(([name, v]) => `<li><i class="dot" style="background:${segColor(name)}"></i>
+  const legend = entries.slice(0, 4).map(([name, v]) => `<li ${name === 'Falta lançar' ? '' : `class="clickable" data-cat="${escapeHtml(name === 'Sem categoria' ? CARD : name)}" data-card="${escapeHtml(c.name)}" data-months="${months}"`}><i class="dot" style="background:${segColor(name)}"></i>
     <span class="name">${escapeHtml(name)}</span><b>${money(v)}</b><em>${pct((v / base) * 100)}</em></li>`).join('');
   const more = entries.length > 4 ? `<li class="muted" style="font-size:.78rem">+ ${entries.length - 4} outra(s) categoria(s)</li>` : '';
   return `<div class="cc" data-open-card="${c.faturas[c.faturas.length - 1]}">
@@ -814,7 +818,7 @@ function renderCardsHistory() {
     const foot = lead && tops.length > 1
       ? `<p class="cc-foot">${escapeHtml(lead[0])} foi a maior categoria em <b>${lead[1]} de ${tops.length}</b> fatura(s) · média de ${money(Math.round(c.total / c.faturas.length))} por fatura</p>`
       : `<p class="cc-foot">${c.faturas.length} fatura(s) no período</p>`;
-    return cardBlock(c, i, segs, foot);
+    return cardBlock(c, i, segs, foot, 6);
   }).join('');
   bindCardTips($('#cardsHistory'), segs);
 }
@@ -1165,7 +1169,7 @@ function renderProjection() {
   const otherDetails = byCategory(others).map(([cat, g]) => {
     const top = g.items.slice().sort((a, b) => b.amount - a.amount).slice(0, 3)
       .map((t) => `${escapeHtml(t.description || t.category)} ${money(t.amount)}`).join(' · ');
-    return `<li><span>${escapeHtml(cat)} <em>${g.n}×</em><small>${top}${g.n > 3 ? ' …' : ''}</small></span><b>− ${money(g.total)}</b></li>`;
+    return `<li class="clickable" data-cat="${escapeHtml(g.items[0].category)}"><span>${escapeHtml(cat)} <em>${g.n}×</em><small>${top}${g.n > 3 ? ' …' : ''}</small></span><b>− ${money(g.total)}</b></li>`;
   }).join('') || '<li class="muted">Nenhum outro gasto lançado.</li>';
   const billDetails = bills.slice().sort((a, b) => a.date.localeCompare(b.date)).map((t) =>
     row(t.description || t.category, `vence ${dm(t.date)} · ${t.paid ? '✓ paga' : 'a pagar'}`, `− ${money(t.amount)}`)).join('');
@@ -1335,6 +1339,85 @@ function askDeleteRecurring(tx) {
   $('#recurText').innerHTML = `<b>${escapeHtml(tx.description || tx.category)}</b> (${money(tx.amount)}) se repete todo mês. ` +
     `Se ela deixou de existir, será removida de ${monthName(m)} em diante; os meses anteriores continuam registrados.`;
   $('#recurDialog').showModal();
+}
+
+// ---------- Compras de uma categoria ----------
+// Abre a lista de lançamentos de uma categoria no mês (inclui os gastos de dentro das faturas).
+// Com `card`, mostra só os gastos daquele cartão; com `months`, soma os últimos N meses.
+let catView = null;
+
+function openCategory(category, opts = {}) {
+  catView = { category, type: opts.type || 'expense', card: opts.card || null, months: Number(opts.months) || 1 };
+  renderCategory();
+  if (!$('#catDialog').open) $('#catDialog').showModal();
+}
+
+function categoryItems(view, endMonth) {
+  const months = [];
+  for (let i = view.months - 1; i >= 0; i--) months.push(shiftMonth(endMonth, -i));
+  const cardKey = view.card && normalizeText(view.card);
+  const out = [];
+  for (const m of months) {
+    for (const t of expand(txOfMonth(m))) {
+      if (t.type !== view.type || t.category !== view.category) continue;
+      if (cardKey) {
+        const fat = t.cardId && state.transactions.find((x) => x.id === t.cardId);
+        if (!fat || normalizeText(cardName(fat)) !== cardKey) continue;
+      }
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+function renderCategory() {
+  const v = catView;
+  if (!v) return;
+  const items = categoryItems(v, currentMonth).sort((a, b) => (b.purchaseDate || b.date).localeCompare(a.purchaseDate || a.date) || b.amount - a.amount);
+  const total = items.reduce((a, t) => a + t.amount, 0);
+  const prevTotal = categoryItems(v, shiftMonth(currentMonth, -v.months)).reduce((a, t) => a + t.amount, 0);
+  const label = v.category === CARD ? 'Cartão (sem categoria / falta lançar)' : v.category;
+  const period = v.months > 1 ? `últimos ${v.months} meses` : monthName(currentMonth);
+  $('#catTitle').innerHTML = `<i class="dot" style="background:${v.category === CARD ? '#f3c44b' : catColor(v.type, v.category)}"></i>${escapeHtml(label)}`;
+  $('#catSub').textContent = `${period}${v.card ? ` · 💳 ${v.card}` : ''}`;
+
+  const sign = v.type === 'income' ? '+ ' : '';
+  let diff = '';
+  if (prevTotal) {
+    const d = ((total - prevTotal) / prevTotal) * 100;
+    diff = `${d >= 0 ? '▲' : '▼'} ${pct(Math.abs(d))} vs ${v.months > 1 ? 'período anterior' : 'mês anterior'}`;
+  }
+  $('#catKpis').innerHTML = [
+    kpi('Total', sign + money(total), diff),
+    kpi(v.type === 'income' ? 'Entradas' : 'Compras', String(items.length), items.length ? `média ${money(Math.round(total / items.length))}` : ''),
+  ].join('');
+
+  // Onde mais gastou: agrupa pelo estabelecimento (descrição)
+  const byPlace = {};
+  items.forEach((t) => {
+    // agrupa pela primeira palavra (a marca): "iFood Japa" e "iFood Pizza" viram "iFood"
+    const key = merchantKey(t.description).split(' ')[0] || normalizeText(t.category);
+    const brand = (t.description || '').trim().split(/[\s*\-]+/)[0];
+    const g = byPlace[key] || (byPlace[key] = { name: brand || t.category, full: t.description || t.category, total: 0, n: 0 });
+    g.total += t.amount; g.n++;
+  });
+  const places = Object.values(byPlace).sort((a, b) => b.total - a.total);
+  $('#catPlacesWrap').hidden = places.length < 2;
+  $('#catPlaces').innerHTML = places.slice(0, 5).map((g) => {
+    const p = total ? (g.total / total) * 100 : 0;
+    return `<li><div class="row"><span>${escapeHtml(g.n === 1 ? g.full : g.name)} <em class="muted">${g.n}×</em></span><b>${money(g.total)} · ${pct(p)}</b></div>
+      <div class="bar"><div style="width:${p}%;background:${v.category === CARD ? '#f3c44b' : catColor(v.type, v.category)}"></div></div></li>`;
+  }).join('');
+
+  const dm = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}${v.months > 1 ? `/${d.slice(2, 4)}` : ''}`;
+  $('#catItems').innerHTML = items.length ? items.map((t) => {
+    const fat = t.cardId && state.transactions.find((x) => x.id === t.cardId);
+    const where = fat ? `💳 ${escapeHtml(cardName(fat))}` : (t.nature === 'fixed' ? '🔁 fixa' : '');
+    return `<li data-cat-item="${t.cardId ? `card:${t.cardId}` : t.id}">
+      <div class="day"><b>${(t.purchaseDate || t.date).slice(8, 10)}</b><small>${monthName(`2000-${(t.purchaseDate || t.date).slice(5, 7)}`, true)}</small></div>
+      <div class="info"><strong>${escapeHtml(t.description || t.category)}</strong><small>${[dm(t.purchaseDate || t.date), where, t.installment ? `parcela ${t.installment}` : ''].filter(Boolean).join(' · ')}</small></div>
+      <span class="amt">${sign}${money(t.amount)}</span></li>`;
+  }).join('') : '<li class="empty-msg">Nenhum lançamento nesta categoria no período.</li>';
 }
 
 // ---------- Lançamentos ----------
@@ -1623,6 +1706,7 @@ function renderAll() {
   renderRecurring();
   renderNotifStatus();
   renderBackupBanner();
+  if (catView && $('#catDialog').open) renderCategory();
 }
 
 // ---------- Eventos ----------
@@ -1867,7 +1951,24 @@ async function protectStorage() {
 }
 protectStorage();
 
+// Tocar em qualquer categoria (Resumo, Insights, cartões, projeção) abre as compras dela
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-cat]');
+  if (!el || el.closest('#catDialog')) return;
+  e.preventDefault();
+  openCategory(el.dataset.cat, { type: el.dataset.catType, card: el.dataset.card, months: el.dataset.months });
+});
+$('#closeCat').onclick = () => { $('#catDialog').close(); catView = null; };
+$('#catItems').addEventListener('click', (e) => {
+  const li = e.target.closest('[data-cat-item]');
+  if (!li) return;
+  const ref = li.dataset.catItem;
+  if (ref.startsWith('card:')) openCard(ref.slice(5));
+  else openForm(state.transactions.find((t) => t.id === ref));
+});
+
 ['#cardsList', '#cardsHistory'].forEach((sel) => $(sel).addEventListener('click', (e) => {
+  if (e.target.closest('[data-cat]')) return; // categoria abre a lista de compras
   const c = e.target.closest('[data-open-card]');
   if (c) openCard(c.dataset.openCard);
 }));

@@ -448,3 +448,13 @@ label.check-row { display: flex; }
 .undo-recv { padding: 4px 8px; font-size: .74rem; background: var(--surface); color: var(--text-2); border: 1px solid var(--border); white-space: nowrap; }
 .toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
 .toast button { background: none; color: #8fd3b8; padding: 2px 4px; font-size: .9rem; }
+
+/* ---------- Toque na categoria ---------- */
+.clickable { cursor: pointer; }
+.breakdown li.clickable:hover .row span, .legend li.clickable:hover .name, .compare li.clickable:hover .name,
+.cc-legend li.clickable:hover .name, .proj-detail li.clickable:hover > span { text-decoration: underline; text-decoration-color: var(--muted); }
+.chev { font-style: normal; color: var(--muted); font-size: 1rem; line-height: 1; }
+#catTitle { display: flex; align-items: center; }
+#catPlacesWrap[hidden] { display: none; }
+.cat-items li { cursor: pointer; }
+.cat-items .amt { font-size: .92rem; }
