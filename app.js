@@ -2,6 +2,7 @@
 
 // ---------- Dados ----------
 const STORAGE_KEY = 'financas.v1';
+const APP_VERSION = '13';
 
 // Paleta categórica (ordem fixa; as 8 primeiras validadas para daltonismo).
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948',
@@ -1950,6 +1951,7 @@ async function protectStorage() {
   } catch { /* navegador sem suporte */ }
 }
 protectStorage();
+$('#appVersion').textContent = `FinGui versão ${APP_VERSION} · ${window.matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'aberto como app instalado' : 'aberto no navegador'}`;
 
 // Tocar em qualquer categoria (Resumo, Insights, cartões, projeção) abre as compras dela
 document.addEventListener('click', (e) => {
@@ -2042,7 +2044,16 @@ document.addEventListener('visibilitychange', () => {
 if (new URLSearchParams(location.search).has('novo')) setTimeout(() => openForm(), 100);
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  // Quando uma versão nova do app assume, recarrega uma vez para não misturar versões
+  if (navigator.serviceWorker.controller) {
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+  }
 }
 
 let resizeTimer;

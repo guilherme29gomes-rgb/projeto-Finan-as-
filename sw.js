@@ -1,7 +1,7 @@
 // Service worker: permite usar o app offline e avisa sobre contas a vencer.
-const CACHE = 'fingui-v12';
+const CACHE = 'fingui-v13';
 const DATA_CACHE = 'fingui-dados'; // contas para os avisos (nunca é apagado nas atualizações)
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
+const ASSETS = ['./', './index.html', './styles.css?v=13', './app.js?v=13', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
@@ -16,10 +16,12 @@ self.addEventListener('activate', (e) => {
 });
 
 // Rede primeiro (pega atualizações), cache como reserva quando offline.
+// "no-cache" faz o navegador conferir com o servidor em vez de usar uma cópia velha,
+// para a página e o visual nunca ficarem de versões diferentes.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

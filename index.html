@@ -7,13 +7,14 @@
   <meta name="color-scheme" content="light dark">
   <meta name="darkreader-lock">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FinGui">
   <title>FinGui</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
   <header class="topbar">
@@ -219,6 +220,7 @@
           <button id="exportCsv" class="secondary">Exportar planilha (CSV)</button>
         </div>
         <button id="restoreSnapshot" class="link-btn">Restaurar cópia automática do aparelho</button>
+        <p id="appVersion" class="muted small-note"></p>
       </div>
     </section>
   </main>
@@ -364,6 +366,6 @@
   <div id="tooltip" class="tooltip" role="status"></div>
   <div id="toast" class="toast"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
