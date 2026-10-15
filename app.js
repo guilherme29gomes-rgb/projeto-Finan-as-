@@ -1,8 +1,29 @@
 'use strict';
 
+// ---------- Modo "site para computador" ----------
+// Se o Chrome estiver em "Versão para computador", ele ignora o tamanho do celular e monta
+// a tela com ~980px, deixando tudo minúsculo. Aqui detectamos isso e ampliamos o app
+// para caber na largura real da tela.
+function fitToPhone() {
+  const screenW = Math.min(window.screen.width, window.screen.height);
+  const touch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  const root = document.documentElement;
+  root.style.zoom = '';
+  const layoutW = window.innerWidth;
+  if (touch && screenW && screenW < 700 && layoutW > screenW * 1.3) {
+    root.style.zoom = String(layoutW / screenW);
+    root.classList.add('desktop-mode-fix');
+  } else {
+    root.classList.remove('desktop-mode-fix');
+  }
+}
+fitToPhone();
+window.addEventListener('resize', fitToPhone);
+window.addEventListener('orientationchange', () => setTimeout(fitToPhone, 200));
+
 // ---------- Dados ----------
 const STORAGE_KEY = 'financas.v1';
-const APP_VERSION = '13';
+const APP_VERSION = '14';
 
 // Paleta categórica (ordem fixa; as 8 primeiras validadas para daltonismo).
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948',
@@ -2039,6 +2060,22 @@ document.addEventListener('visibilitychange', () => {
   renderAll();
   notifyDueBills();
 });
+
+// Reparar: remove o service worker e os arquivos guardados do app (não os dados) e recarrega.
+// Também funciona abrindo o endereço com ?reparar, caso a tela esteja estranha demais.
+async function repairApp() {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) || [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = (await window.caches?.keys()) || [];
+    await Promise.all(keys.filter((k) => k !== 'fingui-dados').map((k) => caches.delete(k)));
+  } catch { /* segue para recarregar mesmo assim */ }
+  location.replace(`./index.html?atualizado=${Date.now()}`);
+}
+$('#repairApp').onclick = () => {
+  if (confirm('Recarregar o app do zero? Seus lançamentos continuam salvos.')) repairApp();
+};
+if (new URLSearchParams(location.search).has('reparar')) repairApp();
 
 // Atalho: abrir direto o formulário via ?novo (usado pelo atalho do app instalado)
 if (new URLSearchParams(location.search).has('novo')) setTimeout(() => openForm(), 100);

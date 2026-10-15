@@ -458,3 +458,6 @@ label.check-row { display: flex; }
 #catPlacesWrap[hidden] { display: none; }
 .cat-items li { cursor: pointer; }
 .cat-items .amt { font-size: .92rem; }
+
+/* Elementos escondidos nunca aparecem, mesmo com display definido em outra regra */
+[hidden] { display: none !important; }
